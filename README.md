@@ -158,7 +158,7 @@ python3 "$SKILL_DIR/scripts/or_free.py" --validate-registry "$HOME/.config/or-fr
 
 Registry writes are atomic and locked, with per-run backups and rollback on failure. See [references/provider-and-registry-policy.md](references/provider-and-registry-policy.md).
 
-### Scheduled daily scan (always use full absolute paths for Python and the script)
+### Scheduled daily scan (always use a full path to the script)
 
 - **Linux (`cron`):**
   ```cron
@@ -166,8 +166,13 @@ Registry writes are atomic and locked, with per-run backups and rollback on fail
   ```
 - **macOS (`launchd`):** in `~/Library/LaunchAgents/com.or-free.scanner.plist`, set `ProgramArguments` to `["/usr/bin/python3", "$HOME/.claude/skills/free-llm-router/scripts/scan_and_sync_free_models.py", "--apply"]` with `StartCalendarInterval` (`Hour=4`, `Minute=15`), then load with `launchctl load ~/Library/LaunchAgents/com.or-free.scanner.plist`. Write the expanded home path into the plist, and change it if the skill is installed elsewhere.
 - **Windows (`schtasks` — CMD / PowerShell):**
+  CMD (`cmd.exe`):
   ```bat
-  schtasks /Create /SC DAILY /TN "or-free-daily-scan" /TR ""C:\Python311\python.exe" "%USERPROFILE%\skills\free-llm-router\scripts\scan_and_sync_free_models.py" --apply" /ST 04:15
+  schtasks /Create /SC DAILY /TN "or-free-daily-scan" /TR "py -3 \"%USERPROFILE%\skills\free-llm-router\scripts\scan_and_sync_free_models.py\" --apply" /ST 04:15
+  ```
+  PowerShell (single quotes so the `\"` escapes are passed through to `schtasks`):
+  ```powershell
+  schtasks /Create /SC DAILY /TN "or-free-daily-scan" /TR 'py -3 \"%USERPROFILE%\skills\free-llm-router\scripts\scan_and_sync_free_models.py\" --apply' /ST 04:15
   ```
 
 ### Maintainer-only: updating the bundled seed in the repository
