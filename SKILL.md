@@ -26,7 +26,7 @@ description: >-
 
 1. **Always resolve `SKILL_DIR` to an absolute path first:**
    - Agents (including Grok Bot, Cursor, and Claude Code) typically execute shell commands from `/workspace` or the user's project root — **not** inside the skill folder. Running a bare `python3 scripts/or_free.py` from `/workspace` will fail with `FileNotFoundError`.
-   - Resolve `SKILL_DIR` from the `Skill directory:` header shown when this `SKILL.md` is loaded (for example `/home/box/agent-data/workflows/free-llm-router` or `/home/box/agent-data/workflows/free-llm-router-2`), and **always quote paths** (`python3 "$SKILL_DIR/scripts/or_free.py"`).
+   - Resolve `SKILL_DIR` from the `Skill directory:` header shown when this `SKILL.md` is loaded (for example `$HOME/agent-data/workflows/free-llm-router` or `$HOME/agent-data/workflows/free-llm-router-2`), and **always quote paths** (`python3 "$SKILL_DIR/scripts/or_free.py"`).
    - Copying the skill folder does **not** install a global `or-free` binary on `PATH`.
 2. **Token-Saving Delegation Contract:**
    - **What to delegate:** self-contained, non-sensitive subtasks (boilerplate functions, public log/doc summarization, regex/JSON conversion, test data generation).
@@ -36,12 +36,12 @@ description: >-
 
 ## Grok Bot 3-Step Install & Discovery
 
-1. **Step 1 — Install skill files:** Extract `free-llm-router/` into `/home/box/agent-data/workflows/free-llm-router/` (or ask Grok Bot to register/update the skill via `UpdateSkill`; if `UpdateSkill` assigns a suffixed folder such as `free-llm-router-2`, the `Skill` tool will report the exact `Skill directory:` path when loaded).
+1. **Step 1 — Install skill files:** Extract `free-llm-router/` into `$HOME/agent-data/workflows/free-llm-router/` (or ask Grok Bot to register/update the skill via `UpdateSkill`; if `UpdateSkill` assigns a suffixed folder such as `free-llm-router-2`, the `Skill` tool will report the exact `Skill directory:` path when loaded).
    - *Other hosts:* Cursor uses `.cursor/skills/free-llm-router/` (project) or `~/.cursor/skills/free-llm-router/` (user); Claude Code / Codex uses `.claude/skills/free-llm-router/` (project) or `~/.claude/skills/free-llm-router/` (user).
 2. **Step 2 — Confirm discovery & set `SKILL_DIR`:** Load `Skill(name="free-llm-router")` (or type `/free-llm-router` in chat) and copy the `Skill directory:` path into `SKILL_DIR`.
 3. **Step 3 — Verify local status, refresh live catalog, and run a keyless test:**
    ```bash
-   SKILL_DIR="/home/box/agent-data/workflows/free-llm-router"
+   SKILL_DIR="$HOME/agent-data/workflows/free-llm-router"
    python3 "$SKILL_DIR/scripts/or_free.py" --status
    python3 "$SKILL_DIR/scripts/scan_and_sync_free_models.py" --apply
    python3 "$SKILL_DIR/scripts/or_free.py" -t fast --max-tokens 64 "Say hello in 5 words"
@@ -67,7 +67,7 @@ description: >-
 ## Single-Line Commands (Copy-Paste Ready)
 
 ```bash
-SKILL_DIR="/home/box/agent-data/workflows/free-llm-router"
+SKILL_DIR="$HOME/agent-data/workflows/free-llm-router"
 python3 "$SKILL_DIR/scripts/or_free.py" --status
 python3 "$SKILL_DIR/scripts/or_free.py" -t fast --max-tokens 64 "Say hello in 5 words"
 python3 "$SKILL_DIR/scripts/or_free.py" --caller "GrokBot" -t code --max-tokens 600 "Write a Python function to merge two sorted lists with doctests."
@@ -77,16 +77,16 @@ python3 "$SKILL_DIR/scripts/or_free.py" -t long --max-tokens 800 "Extract key da
 
 Windows PowerShell (`py -3`):
 ```powershell
-$SKILL_DIR = "C:\\path\\to\\free-llm-router"
-py -3 "$SKILL_DIR\\scripts\\or_free.py" --status
-py -3 "$SKILL_DIR\\scripts\\or_free.py" -t fast --max-tokens 64 "Say hello in 5 words"
+$SKILL_DIR = "$env:USERPROFILE\skills\free-llm-router"
+py -3 "$SKILL_DIR\scripts\or_free.py" --status
+py -3 "$SKILL_DIR\scripts\or_free.py" -t fast --max-tokens 64 "Say hello in 5 words"
 ```
 
 ## Refresh Registry (User vs Maintainer)
 
 User commands (write only to `$OR_FREE_HOME`; `$SKILL_DIR` can be read-only):
 ```bash
-SKILL_DIR="/home/box/agent-data/workflows/free-llm-router"
+SKILL_DIR="$HOME/agent-data/workflows/free-llm-router"
 python3 "$SKILL_DIR/scripts/scan_and_sync_free_models.py" --apply
 python3 "$SKILL_DIR/scripts/scan_and_sync_free_models.py" --apply --json
 python3 "$SKILL_DIR/scripts/or_free.py" --validate-registry "$HOME/.config/or-free/or_free_models_registry.json"

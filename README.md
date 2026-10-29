@@ -19,7 +19,7 @@ Save primary-agent tokens and reduce LLM API costs by routing **non-sensitive** 
 
 | Host Agent | Project Scope | User / Global Scope | Notes |
 |---|---|---|---|
-| **Grok Bot** | — | `/home/box/agent-data/workflows/free-llm-router/` | Extract archive into `/home/box/agent-data/workflows/free-llm-router/`, **or** ask Grok Bot to register/update the skill with `UpdateSkill`. If `UpdateSkill` assigns an ID like `free-llm-router-2`, loading the skill reveals the exact `Skill directory:` path. |
+| **Grok Bot** | — | `~/agent-data/workflows/free-llm-router/` | Extract archive into `~/agent-data/workflows/free-llm-router/`, **or** ask Grok Bot to register/update the skill with `UpdateSkill`. If `UpdateSkill` assigns an ID like `free-llm-router-2`, loading the skill reveals the exact `Skill directory:` path. Change this path if the skill is installed elsewhere. |
 | **Cursor** | `.cursor/skills/free-llm-router/` | `~/.cursor/skills/free-llm-router/` | Keep `SKILL.md` and `scripts/` together inside the folder. |
 | **Claude Code / Codex** | `.claude/skills/free-llm-router/` | `~/.claude/skills/free-llm-router/` | Works with read-only skill mounts (`chmod -R a-w`). |
 
@@ -34,7 +34,7 @@ Because agents run shell commands from `/workspace` or your project root (not in
 **Linux / macOS (`bash` / `zsh` — single-line commands):**
 
 ```bash
-SKILL_DIR="/home/box/agent-data/workflows/free-llm-router"
+SKILL_DIR="$HOME/agent-data/workflows/free-llm-router"
 python3 "$SKILL_DIR/scripts/or_free.py" --status
 python3 "$SKILL_DIR/scripts/scan_and_sync_free_models.py" --apply
 python3 "$SKILL_DIR/scripts/or_free.py" -t fast --max-tokens 64 "Say hello in 5 words"
@@ -51,15 +51,15 @@ python3 "$SKILL_DIR/scripts/or_free.py" -t fast --max-tokens 64 "Say hello in 5 
 **Windows PowerShell (single-line commands, quoted for paths with spaces):**
 
 ```powershell
-py -3 "C:\Users\Alice Smith\skills\free-llm-router\scripts\or_free.py" --status
-py -3 "C:\Users\Alice Smith\skills\free-llm-router\scripts\scan_and_sync_free_models.py" --apply
-py -3 "C:\Users\Alice Smith\skills\free-llm-router\scripts\or_free.py" -t fast --max-tokens 64 "Say hello in 5 words"
+py -3 "$env:USERPROFILE\skills\free-llm-router\scripts\or_free.py" --status
+py -3 "$env:USERPROFILE\skills\free-llm-router\scripts\scan_and_sync_free_models.py" --apply
+py -3 "$env:USERPROFILE\skills\free-llm-router\scripts\or_free.py" -t fast --max-tokens 64 "Say hello in 5 words"
 ```
 
 **Windows CMD (`cmd.exe`):**
 
 ```bat
-set "SKILL_DIR=C:\Users\Alice Smith\skills\free-llm-router"
+set "SKILL_DIR=%USERPROFILE%\skills\free-llm-router"
 py -3 "%SKILL_DIR%\scripts\or_free.py" --status
 py -3 "%SKILL_DIR%\scripts\scan_and_sync_free_models.py" --apply
 py -3 "%SKILL_DIR%\scripts\or_free.py" -t fast --max-tokens 64 "Say hello in 5 words"
@@ -148,7 +148,7 @@ Registry load order (never loaded from CWD): `--registry` (strict) → `OR_FREE_
 ### Standard user scan commands (safe for read-only skill installs)
 
 ```bash
-SKILL_DIR="/home/box/agent-data/workflows/free-llm-router"
+SKILL_DIR="$HOME/agent-data/workflows/free-llm-router"
 python3 "$SKILL_DIR/scripts/scan_and_sync_free_models.py" --apply
 python3 "$SKILL_DIR/scripts/scan_and_sync_free_models.py" --apply --json
 python3 "$SKILL_DIR/scripts/or_free.py" --validate-registry "$HOME/.config/or-free/or_free_models_registry.json"
@@ -162,12 +162,12 @@ Registry writes are atomic and locked, with per-run backups and rollback on fail
 
 - **Linux (`cron`):**
   ```cron
-  15 4 * * * /usr/bin/python3 "/home/box/agent-data/workflows/free-llm-router/scripts/scan_and_sync_free_models.py" --apply >/dev/null 2>&1
+  15 4 * * * /usr/bin/python3 "$HOME/agent-data/workflows/free-llm-router/scripts/scan_and_sync_free_models.py" --apply >/dev/null 2>&1
   ```
-- **macOS (`launchd`):** in `~/Library/LaunchAgents/com.or-free.scanner.plist`, set `ProgramArguments` to `["/usr/bin/python3", "/Users/<you>/.claude/skills/free-llm-router/scripts/scan_and_sync_free_models.py", "--apply"]` with `StartCalendarInterval` (`Hour=4`, `Minute=15`), then load with `launchctl load ~/Library/LaunchAgents/com.or-free.scanner.plist`.
+- **macOS (`launchd`):** in `~/Library/LaunchAgents/com.or-free.scanner.plist`, set `ProgramArguments` to `["/usr/bin/python3", "$HOME/.claude/skills/free-llm-router/scripts/scan_and_sync_free_models.py", "--apply"]` with `StartCalendarInterval` (`Hour=4`, `Minute=15`), then load with `launchctl load ~/Library/LaunchAgents/com.or-free.scanner.plist`. Write the expanded home path into the plist, and change it if the skill is installed elsewhere.
 - **Windows (`schtasks` — CMD / PowerShell):**
   ```bat
-  schtasks /Create /SC DAILY /TN "or-free-daily-scan" /TR ""C:\Python311\python.exe" "C:\Users\Alice Smith\skills\free-llm-router\scripts\scan_and_sync_free_models.py" --apply" /ST 04:15
+  schtasks /Create /SC DAILY /TN "or-free-daily-scan" /TR ""C:\Python311\python.exe" "%USERPROFILE%\skills\free-llm-router\scripts\scan_and_sync_free_models.py" --apply" /ST 04:15
   ```
 
 ### Maintainer-only: updating the bundled seed in the repository
@@ -195,7 +195,7 @@ python3 "$SKILL_DIR/scripts/scan_and_sync_free_models.py" --apply --update-bundl
 To verify that `scripts/or_free.py`, `scripts/scan_and_sync_free_models.py`, and the bundled seed `scripts/or_free_models_registry.json` match the audited R7 release byte-for-byte:
 
 ```bash
-cd "/home/box/agent-data/workflows/free-llm-router" && sha256sum -c SHA256SUMS.txt
+cd "$HOME/agent-data/workflows/free-llm-router" && sha256sum -c SHA256SUMS.txt
 ```
 
 ---

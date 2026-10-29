@@ -2,7 +2,7 @@
 
 - **Prerequisites:** Python 3.9+ (standard library only; no `pip install` required).
 - **Safety first:** **Never put secrets, API keys, or proprietary source code in prompts.** The local partial credential filter (`Exit code: 3`) catches common token patterns only, public endpoints may log prompts, and automatic failover may try the next allowed provider unless `--no-fallback` or `-p <provider>` is set.
-- **Always use `SKILL_DIR`:** Agents (including Grok Bot, Cursor, and Claude Code) run shell commands from `/workspace` or your project directory, **not** inside the skill folder. Set `SKILL_DIR` to the `Skill directory:` path reported when `SKILL.md` is loaded (for example `/home/box/agent-data/workflows/free-llm-router` or `/home/box/agent-data/workflows/free-llm-router-2`), and quote all paths.
+- **Always use `SKILL_DIR`:** Agents (including Grok Bot, Cursor, and Claude Code) run shell commands from `/workspace` or your project directory, **not** inside the skill folder. Set `SKILL_DIR` to the `Skill directory:` path reported when `SKILL.md` is loaded (for example `$HOME/agent-data/workflows/free-llm-router` or `$HOME/agent-data/workflows/free-llm-router-2`), and quote all paths.
 
 ---
 
@@ -11,26 +11,26 @@
 **Linux / macOS (`bash` / `zsh` — single-line):**
 
 ```bash
-SKILL_DIR="/home/box/agent-data/workflows/free-llm-router" && python3 "$SKILL_DIR/scripts/or_free.py" --status
+SKILL_DIR="$HOME/agent-data/workflows/free-llm-router" && python3 "$SKILL_DIR/scripts/or_free.py" --status
 ```
 
 **Windows PowerShell (single-line, quoted path):**
 
 ```powershell
-$SKILL_DIR = "C:\Users\Alice Smith\skills\free-llm-router"; py -3 "$SKILL_DIR\scripts\or_free.py" --status
+$SKILL_DIR = "$env:USERPROFILE\skills\free-llm-router"; py -3 "$SKILL_DIR\scripts\or_free.py" --status
 ```
 
 **Windows CMD (`cmd.exe`):**
 
 ```bat
-set "SKILL_DIR=C:\Users\Alice Smith\skills\free-llm-router" && py -3 "%SKILL_DIR%\scripts\or_free.py" --status
+set "SKILL_DIR=%USERPROFILE%\skills\free-llm-router" && py -3 "%SKILL_DIR%\scripts\or_free.py" --status
 ```
 
 **Expected output (excerpt) & exit code:**
 
 ```text
 === Free LLM Router (or-free) Status ===
-Registry file     : /home/box/.config/or-free/or_free_models_registry.json
+Registry file     : ~/.config/or-free/or_free_models_registry.json
 Pricing verified  : 12 models ($0/$0 catalog proof)
 Keyless allowlist : 3 models (OVH / LLM7 curated)
 Providers         : kilo=READY, llm7=READY, ovh=READY, openrouter=SKIP (waiting_for_key)
@@ -46,7 +46,7 @@ Exit code: 0
 Run a live catalog scan and `"42"` health probe so `$OR_FREE_HOME/or_free_models_registry.json` has fresh `$0/$0` catalog proofs (never modifies `$SKILL_DIR`):
 
 ```bash
-SKILL_DIR="/home/box/agent-data/workflows/free-llm-router" && python3 "$SKILL_DIR/scripts/scan_and_sync_free_models.py" --apply --json > /tmp/or_free_scan.json
+SKILL_DIR="$HOME/agent-data/workflows/free-llm-router" && python3 "$SKILL_DIR/scripts/scan_and_sync_free_models.py" --apply --json > /tmp/or_free_scan.json
 ```
 
 Progress logs go to `stderr`; machine-readable scan results go to `stdout` (`Exit code: 0`).
@@ -62,10 +62,10 @@ To genuinely save primary-agent tokens, the primary agent must delegate a **self
 
 ### Step B — Agent resolves `SKILL_DIR` from `/workspace` and delegates with bounded `--max-tokens`
 
-The agent loads `Skill(name="free-llm-router")`, reads `Skill directory:` (e.g. `/home/box/agent-data/workflows/free-llm-router`), and runs a single-line command from `/workspace`:
+The agent loads `Skill(name="free-llm-router")`, reads `Skill directory:` (e.g. `$HOME/agent-data/workflows/free-llm-router`), and runs a single-line command from `/workspace`:
 
 ```bash
-SKILL_DIR="/home/box/agent-data/workflows/free-llm-router" && python3 "$SKILL_DIR/scripts/or_free.py" --caller "GrokBot" -t code --max-tokens 450 --json "Return ONLY a Python function parse_iso_duration(s: str) -> int for ISO-8601 PT#H#M#S strings with 2 concise doctests. No markdown prose."
+SKILL_DIR="$HOME/agent-data/workflows/free-llm-router" && python3 "$SKILL_DIR/scripts/or_free.py" --caller "GrokBot" -t code --max-tokens 450 --json "Return ONLY a Python function parse_iso_duration(s: str) -> int for ISO-8601 PT#H#M#S strings with 2 concise doctests. No markdown prose."
 ```
 
 ### Step C — Expected stdout (`--json`) and `Exit code: 0`
@@ -104,7 +104,7 @@ SKILL_DIR="/home/box/agent-data/workflows/free-llm-router" && python3 "$SKILL_DI
 ## 3b. Summarization (public text only)
 
 ```bash
-SKILL_DIR="/home/box/agent-data/workflows/free-llm-router" && python3 "$SKILL_DIR/scripts/or_free.py" --caller "GrokBot" -t general --max-tokens 300 "Summarize this PUBLIC changelog in 5 bullets (no secrets): v1.2 adds retry backoff; v1.3 drops Python 3.8."
+SKILL_DIR="$HOME/agent-data/workflows/free-llm-router" && python3 "$SKILL_DIR/scripts/or_free.py" --caller "GrokBot" -t general --max-tokens 300 "Summarize this PUBLIC changelog in 5 bullets (no secrets): v1.2 adds retry backoff; v1.3 drops Python 3.8."
 ```
 
 Primary agent: check `Exit code: 0`, paste the 5 bullets, do **not** rewrite the summary from scratch.
@@ -112,7 +112,7 @@ Primary agent: check `Exit code: 0`, paste the 5 bullets, do **not** rewrite the
 ## 3c. Brainstorming (non-sensitive naming options)
 
 ```bash
-SKILL_DIR="/home/box/agent-data/workflows/free-llm-router" && python3 "$SKILL_DIR/scripts/or_free.py" --caller "GrokBot" -t fast --max-tokens 200 "Suggest 8 concise English names for a CLI that routes free LLM calls. One name per line, no explanations."
+SKILL_DIR="$HOME/agent-data/workflows/free-llm-router" && python3 "$SKILL_DIR/scripts/or_free.py" --caller "GrokBot" -t fast --max-tokens 200 "Suggest 8 concise English names for a CLI that routes free LLM calls. One name per line, no explanations."
 ```
 
 Primary agent: pick 1–2 names from the list after a quick sanity check; do not regenerate a competing list.
