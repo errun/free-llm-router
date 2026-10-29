@@ -1,0 +1,687 @@
+{
+  "schema_version": "2026.10.28-v4",
+  "updated_at": "2026-10-28 23:20:46 UTC+8",
+  "updated_epoch": 1793200846,
+  "pricing_verified_models": {
+    "openrouter/recursive/flint-v1.0:free": {
+      "source": "openrouter_catalog_zero",
+      "prompt_usd": "0",
+      "completion_usd": "0",
+      "verified_at": "2026-10-28 23:20:34 UTC+8",
+      "verified_epoch": 1793200834,
+      "context_length": 262144
+    },
+    "openrouter/xingchen-agi/xing4.0-29b-a4b:free": {
+      "source": "openrouter_catalog_zero",
+      "prompt_usd": "0",
+      "completion_usd": "0",
+      "verified_at": "2026-10-28 23:20:34 UTC+8",
+      "verified_epoch": 1793200834,
+      "context_length": 262144
+    },
+    "openrouter/poolside/laguna-s-2.1:free": {
+      "source": "openrouter_catalog_zero",
+      "prompt_usd": "0",
+      "completion_usd": "0",
+      "verified_at": "2026-10-28 23:20:34 UTC+8",
+      "verified_epoch": 1793200834,
+      "context_length": 262144
+    },
+    "openrouter/poolside/laguna-xs-2.1:free": {
+      "source": "openrouter_catalog_zero",
+      "prompt_usd": "0",
+      "completion_usd": "0",
+      "verified_at": "2026-10-28 23:20:34 UTC+8",
+      "verified_epoch": 1793200834,
+      "context_length": 262144
+    },
+    "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": {
+      "source": "openrouter_catalog_zero",
+      "prompt_usd": "0",
+      "completion_usd": "0",
+      "verified_at": "2026-10-28 23:20:34 UTC+8",
+      "verified_epoch": 1793200834,
+      "context_length": 256000
+    },
+    "openrouter/google/gemma-4-26b-a4b-it:free": {
+      "source": "openrouter_catalog_zero",
+      "prompt_usd": "0",
+      "completion_usd": "0",
+      "verified_at": "2026-10-28 23:20:34 UTC+8",
+      "verified_epoch": 1793200834,
+      "context_length": 262144
+    },
+    "openrouter/google/gemma-4-31b-it:free": {
+      "source": "openrouter_catalog_zero",
+      "prompt_usd": "0",
+      "completion_usd": "0",
+      "verified_at": "2026-10-28 23:20:34 UTC+8",
+      "verified_epoch": 1793200834,
+      "context_length": 262144
+    },
+    "openrouter/openrouter/free": {
+      "source": "openrouter_catalog_zero",
+      "prompt_usd": "0",
+      "completion_usd": "0",
+      "verified_at": "2026-10-28 23:20:34 UTC+8",
+      "verified_epoch": 1793200834,
+      "context_length": 200000
+    },
+    "kilo/recursive/flint-v1.0:free": {
+      "source": "kilo_catalog_zero",
+      "prompt_usd": "0",
+      "completion_usd": "0",
+      "verified_at": "2026-10-28 23:20:34 UTC+8",
+      "verified_epoch": 1793200834,
+      "context_length": 262144
+    },
+    "kilo/xingchen-agi/xing4.0-29b-a4b:free": {
+      "source": "kilo_catalog_zero",
+      "prompt_usd": "0",
+      "completion_usd": "0",
+      "verified_at": "2026-10-28 23:20:34 UTC+8",
+      "verified_epoch": 1793200834,
+      "context_length": 262144
+    },
+    "kilo/poolside/laguna-s-2.1:free": {
+      "source": "kilo_catalog_zero",
+      "prompt_usd": "0",
+      "completion_usd": "0",
+      "verified_at": "2026-10-28 23:20:34 UTC+8",
+      "verified_epoch": 1793200834,
+      "context_length": 262144
+    },
+    "kilo/poolside/laguna-xs-2.1:free": {
+      "source": "kilo_catalog_zero",
+      "prompt_usd": "0",
+      "completion_usd": "0",
+      "verified_at": "2026-10-28 23:20:34 UTC+8",
+      "verified_epoch": 1793200834,
+      "context_length": 262144
+    }
+  },
+  "curated_keyless_allowlist_models": {
+    "ovh/Meta-Llama-3_3-70B-Instruct": {
+      "source": "curated_keyless_public_tier",
+      "note": "Keyless public endpoint allowlist (vendor catalog uses rate-card stubs; no API key or billing account attached)",
+      "verified_at": "2026-10-28 23:20:34 UTC+8"
+    },
+    "ovh/Qwen2.5-VL-72B-Instruct": {
+      "source": "curated_keyless_public_tier",
+      "note": "Keyless public endpoint allowlist (vendor catalog uses rate-card stubs; no API key or billing account attached)",
+      "verified_at": "2026-10-28 23:20:34 UTC+8"
+    },
+    "llm7/codestral-latest": {
+      "source": "curated_keyless_public_tier",
+      "note": "Keyless public endpoint allowlist (vendor catalog uses rate-card stubs; no API key or billing account attached)",
+      "verified_at": "2026-10-28 23:20:34 UTC+8"
+    }
+  },
+  "verified_free_models": [
+    "kilo/poolside/laguna-s-2.1:free",
+    "kilo/poolside/laguna-xs-2.1:free",
+    "kilo/recursive/flint-v1.0:free",
+    "kilo/xingchen-agi/xing4.0-29b-a4b:free",
+    "llm7/codestral-latest",
+    "openrouter/google/gemma-4-26b-a4b-it:free",
+    "openrouter/google/gemma-4-31b-it:free",
+    "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "openrouter/openrouter/free",
+    "openrouter/poolside/laguna-s-2.1:free",
+    "openrouter/poolside/laguna-xs-2.1:free",
+    "openrouter/recursive/flint-v1.0:free",
+    "openrouter/xingchen-agi/xing4.0-29b-a4b:free",
+    "ovh/Meta-Llama-3_3-70B-Instruct",
+    "ovh/Qwen2.5-VL-72B-Instruct"
+  ],
+  "security_gates": {
+    "gate_1_https_whitelist": "ENFORCED",
+    "gate_2_zero_billing_lock": "ENFORCED (OpenRouter/Kilo require live catalog pricing.prompt==0 & pricing.completion==0 proof; OVH/LLM7 use curated keyless allowlist — vendor catalogs use rate-card stubs; no API key/billing attached; NVIDIA/RouteOpen default-off)",
+    "gate_3_anti_poisoning": "ENFORCED (<7B tiny models and safety/embedding classifiers excluded)",
+    "gate_4_live_probe": "PASS (6 verified content==42, 9 HTTP 429 standby, 22 pruned)",
+    "gate_5_self_test": {
+      "py_compile": "PASS",
+      "validate_registry": "PASS",
+      "sha256_match": "PASS",
+      "pools_match": "PASS",
+      "corrupt_registry_exit_4": "PASS",
+      "dlp_guard_exit_3": "PASS",
+      "zero_billing_exit_2": "PASS",
+      "kilo_unverified_exit_2": "PASS",
+      "disguised_free_suffix_exit_2": "PASS",
+      "status": "PASS"
+    }
+  },
+  "summary": {
+    "total_probed": 37,
+    "live_200": 6,
+    "standby_429": 9,
+    "excluded": 107
+  },
+  "live_200_models": [
+    {
+      "id": "openrouter/poolside/laguna-s-2.1:free",
+      "latency_ms": 888.3,
+      "rank": 57,
+      "note": "118B-A8B Coding Agent (262K ctx)"
+    },
+    {
+      "id": "kilo/poolside/laguna-s-2.1:free",
+      "latency_ms": 1349.3,
+      "rank": 57,
+      "note": "118B-A8B Coding Agent (Kilo Keyless, 262K ctx)"
+    },
+    {
+      "id": "llm7/codestral-latest",
+      "latency_ms": 1426.1,
+      "rank": 85,
+      "note": "Mistral Codestral Latest (LLM7 Keyless)"
+    },
+    {
+      "id": "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      "latency_ms": 1254.6,
+      "rank": 89,
+      "note": "30B-A3B Reasoning (256K ctx)"
+    },
+    {
+      "id": "ovh/Meta-Llama-3_3-70B-Instruct",
+      "latency_ms": 999.3,
+      "rank": 91,
+      "note": "Llama-3.3-70B-Instruct (OVH Keyless, 131K ctx)"
+    },
+    {
+      "id": "ovh/Qwen2.5-VL-72B-Instruct",
+      "latency_ms": 850.5,
+      "rank": 92,
+      "note": "Qwen2.5-VL-72B-Instruct (OVH Keyless)"
+    }
+  ],
+  "fallback_429_models": [
+    {
+      "id": "openrouter/poolside/laguna-xs-2.1:free",
+      "rank": 60,
+      "note": "33B-A3B Coding Agent (262K ctx)"
+    },
+    {
+      "id": "kilo/poolside/laguna-xs-2.1:free",
+      "rank": 60,
+      "note": "33B-A3B Coding Agent (Kilo Keyless, 262K ctx)"
+    },
+    {
+      "id": "openrouter/recursive/flint-v1.0:free",
+      "rank": 62,
+      "note": "40B-A2.5B MoE Coding Agent (262K ctx)"
+    },
+    {
+      "id": "kilo/recursive/flint-v1.0:free",
+      "rank": 62,
+      "note": "40B-A2.5B MoE Coding Agent (Kilo Keyless, 262K ctx)"
+    },
+    {
+      "id": "openrouter/google/gemma-4-31b-it:free",
+      "rank": 69,
+      "note": "Gemma-4-31B-IT (256K ctx)"
+    },
+    {
+      "id": "openrouter/google/gemma-4-26b-a4b-it:free",
+      "rank": 73,
+      "note": "Gemma-4-26B-A4B MoE (256K ctx)"
+    },
+    {
+      "id": "openrouter/xingchen-agi/xing4.0-29b-a4b:free",
+      "rank": 75,
+      "note": "Xing4.0-29B-A4B MoE (131K ctx)"
+    },
+    {
+      "id": "kilo/xingchen-agi/xing4.0-29b-a4b:free",
+      "rank": 75,
+      "note": "Xing4.0 (Kilo)"
+    },
+    {
+      "id": "openrouter/openrouter/free",
+      "rank": 95,
+      "note": "OpenRouter Auto Free Router (200K ctx)"
+    }
+  ],
+  "demoted_or_excluded": [
+    {
+      "id": "openrouter/liquid/lfm-2.5-2.6b:free",
+      "reason": "Gate 3: Excluded classifier/tiny model"
+    },
+    {
+      "id": "openrouter/nvidia/nemotron-3.5-content-safety:free",
+      "reason": "Gate 3: Excluded classifier/tiny model"
+    },
+    {
+      "id": "kilo/liquid/lfm-2.5-2.6b:free",
+      "reason": "Gate 3: Excluded"
+    },
+    {
+      "id": "kilo/nvidia/nemotron-3.5-content-safety:free",
+      "reason": "Gate 3: Excluded"
+    },
+    {
+      "id": "ovh/Qwen3Guard-Gen-0.6B",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/Mistral-Nemo-Instruct-2407",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/Qwen3.8-27B",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/Qwen3Guard-Gen-8B",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/Mistral-Small-3.2-24B-Instruct-2506",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/Qwen3.5-9B",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/gpt-oss-20b",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/stable-diffusion-xl-base-v10",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/nvr-tts-es-es",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/nvr-tts-en-us",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/nvr-tts-it-it",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/nvr-tts-de-de",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/whisper-large-v3-turbo",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/whisper-large-v3",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/bge-multilingual-gemma2",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/Qwen3-Embedding-8B",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "ovh/bge-m3",
+      "reason": "Gate 2: OVH model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/DeepSeek-V4.1-Flash",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/Inkling-Small",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/L3-8B-Lunaris-v1-Turbo",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/Voxtral-Mini-3B-2507",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/Voxtral-Small-24B-2507",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/anthropic/claude-opus-4-6",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/anthropic/claude-opus-4-7",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/anthropic/claude-opus-4-8",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/anthropic/claude-sonnet-4-6",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/anthropic/claude-sonnet-5",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/anthropic/claude-sonnet-5-5",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/chroma-v.46-flash",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/claude-fable-5",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/claude-fable-5-1",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/claude-haiku-4-5",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/claude-haiku-5-5",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/claude-opus-4-8",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/claude-opus-5",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/claude-opus-5-5",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/claude-sonnet-4-6",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/claude-sonnet-5",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/dark-beast-krea2",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/deepseek-v4-flash:0731",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/deepseek-v4-pro",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gemini-3-flash",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gemini-3.0-pro-image",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gemini-3.1-flash-image",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gemini-3.1-pro",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gemini-3.6-flash-high",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gemini-3.8-flash-high",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gemini-4-argon",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gemini-nano-banana-2.1",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gemini-omni-flash",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gemma4:31b",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/glm-5.2",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/glm-5.3",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gpt-5.6-sol",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gpt-5.6-terra",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gpt-6-astra",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gpt-6-luna",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gpt-6-sol",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gpt-6.1-sol",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gpt-image-2",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/gpt-image-2.5",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/grok-4.7",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/jev-latest",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/kimi-k2.6",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/kimi-k2.7-code",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/kimi-k3",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/kling-v3.0-pro",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/kling-v3.0-turbo",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/llama-4-maverick",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/minimax-m3",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/mistral-Nemo-Instruct-2407",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/mistral-Small-24B-Instruct-2501",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/mistral-large-3:675b",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/muse-spark-1.3",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/seed-2.0-mini",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/seedance-2.0",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/seedance-2.0-fast",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/seedance-2.0-mini",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/whisper-large-v3",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "llm7/whisper-large-v3-turbo",
+      "reason": "Gate 2: LLM7 model not in curated keyless allowlist"
+    },
+    {
+      "id": "routeopen/*,nvidia/*",
+      "reason": "Gate 2: disabled by default (not guaranteed $0 for strangers)"
+    }
+  ],
+  "task_pools": {
+    "general": {
+      "description": "Verified free pool (catalog $0 proof for OR/Kilo; curated keyless for OVH/LLM7).",
+      "interleave_schedule": [
+        "openrouter/poolside/laguna-s-2.1:free",
+        "kilo/poolside/laguna-s-2.1:free",
+        "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "ovh/Meta-Llama-3_3-70B-Instruct",
+        "ovh/Qwen2.5-VL-72B-Instruct"
+      ],
+      "fallback_chain": [
+        "openrouter/poolside/laguna-s-2.1:free",
+        "kilo/poolside/laguna-s-2.1:free",
+        "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "ovh/Meta-Llama-3_3-70B-Instruct",
+        "ovh/Qwen2.5-VL-72B-Instruct",
+        "openrouter/poolside/laguna-xs-2.1:free",
+        "kilo/poolside/laguna-xs-2.1:free",
+        "openrouter/recursive/flint-v1.0:free",
+        "kilo/recursive/flint-v1.0:free",
+        "openrouter/google/gemma-4-31b-it:free",
+        "openrouter/google/gemma-4-26b-a4b-it:free",
+        "openrouter/xingchen-agi/xing4.0-29b-a4b:free",
+        "kilo/xingchen-agi/xing4.0-29b-a4b:free",
+        "openrouter/openrouter/free",
+        "llm7/codestral-latest"
+      ]
+    },
+    "code": {
+      "description": "Verified free coding-oriented pool.",
+      "interleave_schedule": [
+        "openrouter/poolside/laguna-s-2.1:free",
+        "kilo/poolside/laguna-s-2.1:free",
+        "llm7/codestral-latest",
+        "ovh/Meta-Llama-3_3-70B-Instruct"
+      ],
+      "fallback_chain": [
+        "openrouter/poolside/laguna-s-2.1:free",
+        "kilo/poolside/laguna-s-2.1:free",
+        "llm7/codestral-latest",
+        "ovh/Meta-Llama-3_3-70B-Instruct",
+        "openrouter/poolside/laguna-xs-2.1:free",
+        "kilo/poolside/laguna-xs-2.1:free",
+        "openrouter/recursive/flint-v1.0:free",
+        "kilo/recursive/flint-v1.0:free",
+        "openrouter/google/gemma-4-31b-it:free",
+        "openrouter/xingchen-agi/xing4.0-29b-a4b:free",
+        "kilo/xingchen-agi/xing4.0-29b-a4b:free",
+        "openrouter/openrouter/free",
+        "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "ovh/Qwen2.5-VL-72B-Instruct"
+      ]
+    },
+    "long": {
+      "description": "Verified long-context only (tier contains long or context_length>=200000).",
+      "interleave_schedule": [
+        "openrouter/poolside/laguna-s-2.1:free",
+        "kilo/poolside/laguna-s-2.1:free",
+        "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+      ],
+      "fallback_chain": [
+        "openrouter/poolside/laguna-s-2.1:free",
+        "kilo/poolside/laguna-s-2.1:free",
+        "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "openrouter/poolside/laguna-xs-2.1:free",
+        "kilo/poolside/laguna-xs-2.1:free",
+        "openrouter/recursive/flint-v1.0:free",
+        "kilo/recursive/flint-v1.0:free",
+        "openrouter/google/gemma-4-31b-it:free",
+        "openrouter/google/gemma-4-26b-a4b-it:free",
+        "openrouter/xingchen-agi/xing4.0-29b-a4b:free",
+        "kilo/xingchen-agi/xing4.0-29b-a4b:free",
+        "openrouter/openrouter/free"
+      ]
+    },
+    "fast": {
+      "description": "Verified free low-latency candidates.",
+      "interleave_schedule": [
+        "openrouter/poolside/laguna-s-2.1:free",
+        "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "kilo/poolside/laguna-s-2.1:free",
+        "llm7/codestral-latest"
+      ],
+      "fallback_chain": [
+        "openrouter/poolside/laguna-s-2.1:free",
+        "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "kilo/poolside/laguna-s-2.1:free",
+        "llm7/codestral-latest",
+        "openrouter/poolside/laguna-xs-2.1:free",
+        "kilo/poolside/laguna-xs-2.1:free",
+        "openrouter/recursive/flint-v1.0:free",
+        "kilo/recursive/flint-v1.0:free",
+        "openrouter/google/gemma-4-26b-a4b-it:free",
+        "openrouter/openrouter/free",
+        "ovh/Meta-Llama-3_3-70B-Instruct",
+        "ovh/Qwen2.5-VL-72B-Instruct"
+      ]
+    }
+  }
+}
