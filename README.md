@@ -93,6 +93,50 @@ See [examples/README.md](examples/README.md) for a complete end-to-end **Grok Bo
 
 ---
 
+## Quota policy gate
+
+Before each call, `or_free.py` reads `quota_policy.json` (`OR_FREE_QUOTA_POLICY_PATH`, otherwise `$OR_FREE_HOME/quota_policy.json`) and decides whether the task stays on the primary model or goes to the free pool. **Without a policy file, behavior is unchanged:** the decision is `POLICY_UNAVAILABLE` and the call still uses the free pool.
+
+```bash
+python3 "$SKILL_DIR/scripts/or_free.py" --check-policy --json
+```
+
+`--check-policy` always exits `0` and prints decision JSON. Read `decision`:
+
+| `decision` | What to do |
+|---|---|
+| `USE_FREE` | Offload to the free pool. |
+| `BYPASS_TO_PRIMARY` | Keep the task on the primary model. |
+| `POLICY_UNAVAILABLE` | No readable policy file. Offload as before. |
+
+**`BYPASS_TO_PRIMARY` exits `0` with no model reply.** A gated call prints one decision JSON line and does not contact a provider. Callers must check `decision`, not only the exit code, before treating stdout as a model answer.
+
+An expired `cycle.reset_at` rolls forward automatically (same length, default 7 days): usage becomes `unknown`, tier becomes `blue`, and `revision` increments. Unknown usage routes as conservative blue (`USE_FREE`). Set `OR_FREE_POLICY_NO_ROLLOVER=1` to renew in memory only. Write `usage.status` to `known` and set `used_fraction` (0–1) when a live sample is available.
+
+Minimal `quota_policy.json` (placeholder values only):
+
+```json
+{
+  "revision": 1,
+  "cycle": {
+    "cycle_id": "example-cycle",
+    "starts_at": "2026-01-01T00:00:00Z",
+    "reset_at": "2026-01-08T00:00:00Z"
+  },
+  "usage": {
+    "status": "unknown",
+    "used_fraction": null,
+    "observed_at": null,
+    "max_age_seconds": 600
+  },
+  "runtime": {
+    "tier": "blue"
+  }
+}
+```
+
+---
+
 ## Saved registry snapshot vs. live catalog scans (and TTL)
 
 - **Normal `or_free.py` calls do NOT fetch live catalogs on every prompt.** They read the saved registry snapshot in `$OR_FREE_HOME/or_free_models_registry.json` (falling back to the bundled seed `scripts/or_free_models_registry.json` on first run before `--apply` has been run).
@@ -121,7 +165,9 @@ Router and scanner resolve keys in the same order:
 | Variable | Purpose |
 |---|---|
 | `OPENROUTER_API_KEY` / `OR_API_KEY` | Optional free-tier OpenRouter key; unlocks `:free` models that also pass `$0/$0` catalog checks |
-| `OR_FREE_HOME` | Optional override for config/state/log directory (defaults: `~/.config/or-free` on Linux/macOS, `%LOCALAPPDATA%\or-free` on Windows) |
+| `OR_FREE_HOME` | Optional override for config/state/log directory (defaults: `~/.config/or-free` on Linux/macOS, `%LOCALAPPDATA%\or-free` on Windows). Default policy path is `$OR_FREE_HOME/quota_policy.json` |
+| `OR_FREE_QUOTA_POLICY_PATH` | Optional path to `quota_policy.json`. Missing file means no quota gating |
+| `OR_FREE_POLICY_NO_ROLLOVER` | Set to `1` to renew an expired cycle in memory only (do not write the policy file back) |
 | `OR_FREE_REGISTRY_PATH` | **Strict** registry path (overridden by `--registry`; exits with code `4` on missing/invalid/stale file) |
 | `OR_FREE_MAX_REGISTRY_AGE_HOURS` | Reject catalog price proofs older than `<hours>` (finite `> 0`) |
 | `XDG_CONFIG_HOME` | Linux/macOS config root (`$XDG_CONFIG_HOME/or-free` when `OR_FREE_HOME` is unset) |
@@ -133,7 +179,7 @@ Router and scanner resolve keys in the same order:
 
 | Code | Meaning |
 |---:|---|
-| `0` | **Success:** route candidate returned a valid response (or `--status` / `--validate-registry` succeeded). |
+| `0` | **Success:** route candidate returned a valid response, or `--status` / `--validate-registry` / `--check-policy` succeeded. A quota-gated `BYPASS_TO_PRIMARY` also exits `0` and prints decision JSON only (no model reply) — check `decision`. |
 | `1` | **Candidates exhausted or runtime/lock error:** all allowed route candidates failed/timed out, general runtime error, or state lock/persistence failure. |
 | `2` | **Blocked by zero-cost policy gate:** requested model/provider failed `is_safe_free_target` (paid model, missing `$0/$0` catalog proof, or unverified provider without `--allow-unverified-model`). |
 | `3` | **Blocked by local DLP filter:** prompt matched the partial credential filter before any network request was sent. |

@@ -1802,6 +1802,434 @@ def show_routes(as_json: bool = False) -> None:
         )
 
 
+# ── Dynamic Grok Ultra Quota Policy Gate ──────────────────────────────────────
+
+TIER_CONSERVATIVE_RANK: Dict[str, int] = {
+    "red": 0,
+    "yellow": 1,
+    "blue": 2,
+    "green": 3,
+}
+
+
+def get_quota_policy_path(explicit: Optional[Path] = None) -> Path:
+    if explicit is not None:
+        return Path(explicit).expanduser()
+    env_p = (os.environ.get("OR_FREE_QUOTA_POLICY_PATH") or "").strip()
+    if env_p:
+        return Path(env_p).expanduser()
+    return get_app_home() / "quota_policy.json"
+
+
+def _parse_iso_utc(ts_raw: Any) -> Optional[datetime]:
+    if not ts_raw or not isinstance(ts_raw, str):
+        return None
+    s = ts_raw.strip()
+    try:
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+DEFAULT_CYCLE_PERIOD = timedelta(days=7)
+
+
+def rollover_quota_policy(
+    policy: Dict[str, Any],
+    now: Optional[datetime] = None,
+) -> Tuple[Dict[str, Any], bool]:
+    """Roll an expired cycle forward to the cycle containing `now` (0-token, local).
+
+    Live usage is NOT known for the new cycle, so usage.status becomes "unknown"
+    and runtime.tier falls back to the conservative known default "blue".
+    Returns (policy, rolled). Never raises; on bad data returns (policy, False).
+    """
+    try:
+        now_dt = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        cycle = policy.get("cycle") if isinstance(policy.get("cycle"), dict) else None
+        if cycle is None:
+            return policy, False
+        starts_at = _parse_iso_utc(cycle.get("starts_at"))
+        reset_at = _parse_iso_utc(cycle.get("reset_at"))
+        if reset_at is None or now_dt < reset_at:
+            return policy, False
+        period = (reset_at - starts_at) if (starts_at is not None and reset_at > starts_at) else DEFAULT_CYCLE_PERIOD
+        if period.total_seconds() < 3600:
+            period = DEFAULT_CYCLE_PERIOD
+        n = int((now_dt - reset_at).total_seconds() // period.total_seconds()) + 1
+        new_start = reset_at + period * (n - 1)
+        new_reset = new_start + period
+        fmt = lambda d: d.strftime("%Y-%m-%dT%H:%M:%SZ")
+        now_s = fmt(now_dt)
+        new_p = json.loads(json.dumps(policy))
+        old_cycle_id = cycle.get("cycle_id") or cycle.get("starts_at")
+        old_usage = policy.get("usage") if isinstance(policy.get("usage"), dict) else {}
+        new_p["cycle"]["cycle_id"] = fmt(new_start)
+        new_p["cycle"]["starts_at"] = fmt(new_start)
+        new_p["cycle"]["reset_at"] = fmt(new_reset)
+        new_p["usage"] = {
+            "status": "unknown",
+            "plan": old_usage.get("plan"),
+            "source": "lazy_rollover_no_live_usage",
+            "sample_id": None,
+            "observed_at": None,
+            "used_fraction": None,
+            "remaining_fraction": None,
+            "max_age_seconds": old_usage.get("max_age_seconds", 600),
+            "unknown_since": now_s,
+            "previous_sample_id": old_usage.get("sample_id"),
+        }
+        rt = new_p.get("runtime") if isinstance(new_p.get("runtime"), dict) else {}
+        rt.update({"tier": "blue", "tier_since": now_s, "candidate_tier": None, "candidate_fresh_sample_count": 0})
+        new_p["runtime"] = rt
+        try:
+            new_p["revision"] = int(policy.get("revision") or 0) + 1
+        except Exception:
+            new_p["revision"] = 1
+        new_p["writer_id"] = "or_free_lazy_rollover"
+        new_p["generated_at"] = now_s
+        # usage unknown => no live-snapshot freshness to expire; valid for the new cycle
+        new_p["valid_until"] = fmt(new_reset)
+        new_p["rollover"] = {
+            "rolled_at": now_s,
+            "from_cycle_id": old_cycle_id,
+            "periods_advanced": n,
+            "usage_unknown": True,
+            "fallback_tier": "blue",
+            "note": "cycle reset passed; live usage unavailable -> conservative blue routing",
+        }
+        return new_p, True
+    except Exception:
+        return policy, False
+
+
+def _atomic_write_policy(target: Path, policy: Dict[str, Any]) -> bool:
+    try:
+        tmp = target.with_name(target.name + f".tmp.{os.getpid()}")
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(policy, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, target)
+        return True
+    except Exception:
+        return False
+
+
+def load_quota_policy(policy_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Loader for quota_policy.json ($OR_FREE_QUOTA_POLICY_PATH, else $OR_FREE_HOME|$XDG_CONFIG_HOME/or-free|~/.config/or-free). Never crashes; missing file -> None (POLICY_UNAVAILABLE, calls proceed as before).
+
+    Lazy 0-token refresh: if the quota cycle reset has passed, the cycle is rolled
+    forward (usage -> unknown, tier -> blue) and persisted atomically, keeping a
+    one-time backup of the pre-rollover file. OR_FREE_POLICY_NO_ROLLOVER=1 disables the write-back (in-memory rollover still applies).
+    """
+    target = get_quota_policy_path(policy_path)
+    try:
+        if not target.is_file():
+            return None
+        raw = json.loads(target.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return None
+        if "cycle" not in raw or "usage" not in raw or "runtime" not in raw:
+            return None
+    except Exception:
+        return None
+    if (os.environ.get("OR_FREE_POLICY_NO_ROLLOVER") or "").strip() not in ("1", "true", "yes"):
+        rolled_p, rolled = rollover_quota_policy(raw)
+        if rolled:
+            try:
+                bak = target.with_name(target.name + ".pre-rollover." + str(raw.get("revision")))
+                if not bak.exists():
+                    bak.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+            except Exception:
+                pass
+            _atomic_write_policy(target, rolled_p)
+            return rolled_p
+    return raw
+
+
+def effective_tier(
+    policy: Optional[Dict[str, Any]],
+    now: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """Compute effective quota tier with reserve deduction, time progress, and expiry fallback."""
+    now_dt = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    if not isinstance(policy, dict):
+        return {
+            "tier": "unknown",
+            "fallback_tier": "blue",
+            "raw_tier": "unknown",
+            "policy_revision": None,
+            "status": "policy_unavailable",
+            "reason": "policy_missing_or_corrupt",
+            "usage_unknown": True,
+            "used_fraction": None,
+            "remaining_fraction": None,
+            "beta": None,
+            "surplus": None,
+            "hours_to_reset": None,
+            "valid_until": None,
+        }
+
+    revision = policy.get("revision")
+    runtime = policy.get("runtime") if isinstance(policy.get("runtime"), dict) else {}
+    raw_tier = str(runtime.get("tier") or "blue").strip().lower()
+    if raw_tier not in TIER_CONSERVATIVE_RANK:
+        raw_tier = "blue"
+
+    cycle = policy.get("cycle") if isinstance(policy.get("cycle"), dict) else {}
+    usage = policy.get("usage") if isinstance(policy.get("usage"), dict) else {}
+    thresholds = policy.get("thresholds") if isinstance(policy.get("thresholds"), dict) else {}
+
+    starts_at = _parse_iso_utc(cycle.get("starts_at"))
+    reset_at = _parse_iso_utc(cycle.get("reset_at"))
+    valid_until = _parse_iso_utc(policy.get("valid_until"))
+    observed_at = _parse_iso_utc(usage.get("observed_at"))
+
+    rolled_over = False
+    if reset_at is not None and now_dt >= reset_at:
+        # Old behaviour returned status=cycle_expired (=> BYPASS_TO_PRIMARY forever until
+        # someone rewrote the file). Now roll forward in memory to the current cycle.
+        rolled_p, rolled_over = rollover_quota_policy(policy, now_dt)
+        if not rolled_over:
+            return {
+                "tier": "blue",
+                "fallback_tier": "blue",
+                "raw_tier": raw_tier,
+                "policy_revision": revision,
+                "status": "cycle_expired",
+                "reason": "cycle_reset_passed_blue_unknown",
+                "usage_unknown": True,
+                "used_fraction": None,
+                "remaining_fraction": None,
+                "beta": None,
+                "surplus": None,
+                "hours_to_reset": 0.0,
+                "valid_until": policy.get("valid_until"),
+            }
+        policy = rolled_p
+        revision = policy.get("revision")
+        raw_tier = "blue"
+        cycle = policy["cycle"]
+        usage = policy["usage"]
+        starts_at = _parse_iso_utc(cycle.get("starts_at"))
+        reset_at = _parse_iso_utc(cycle.get("reset_at"))
+        valid_until = _parse_iso_utc(policy.get("valid_until"))
+        observed_at = None
+
+    usage_status = str(usage.get("status") or "").strip().lower()
+    try:
+        used_f = float(usage.get("used_fraction"))
+    except Exception:
+        used_f = -1.0
+
+    if usage_status != "known" or not math.isfinite(used_f) or used_f < 0.0 or used_f > 1.0:
+        cons_tier = raw_tier if TIER_CONSERVATIVE_RANK[raw_tier] <= TIER_CONSERVATIVE_RANK["blue"] else "blue"
+        return {
+            "tier": cons_tier,
+            "fallback_tier": cons_tier,
+            "raw_tier": raw_tier,
+            "policy_revision": revision,
+            "status": "usage_unknown",
+            "reason": "new_cycle_usage_unknown_default_blue" if (rolled_over or isinstance(policy.get("rollover"), dict)) else "usage_unknown_default_conservative_tier",
+            "usage_unknown": True,
+            "used_fraction": None,
+            "remaining_fraction": None,
+            "beta": None,
+            "surplus": None,
+            "hours_to_reset": round(max(0.0, (reset_at - now_dt).total_seconds() / 3600.0), 2) if reset_at else None,
+            "valid_until": policy.get("valid_until"),
+            "cycle_reset_at": cycle.get("reset_at"),
+        }
+
+    R = max(0.0, min(1.0, 1.0 - used_f))
+    if reset_at is not None and starts_at is not None and reset_at > starts_at:
+        h = max(0.0, (reset_at - now_dt).total_seconds() / 3600.0)
+        L = max(1e-6, (reset_at - starts_at).total_seconds() / 3600.0)
+    else:
+        h = 24.0
+        L = 168.0
+    T = max(0.0, min(1.0, h / L))
+
+    reserve_base = float(thresholds.get("reserve_fraction", 0.05))
+    release_h = float(thresholds.get("reserve_release_hours", 12.0))
+    F = reserve_base * min(1.0, h / release_h) if release_h > 0 else reserve_base
+    A = max(R - F, 0.0)
+    U = (1.0 - F) * T
+    surplus = A - U
+    beta = (A / U) if U > 1e-9 else (999.0 if A > 0 else 0.0)
+
+    red_beta = float(thresholds.get("red_beta", 0.60))
+    yellow_beta = float(thresholds.get("yellow_beta", 0.90))
+    green_beta = float(thresholds.get("green_beta", 1.25))
+    clearance_h = float(thresholds.get("clearance_hours", 24.0))
+    green_surplus = float(thresholds.get("green_surplus_fraction", 0.05))
+
+    if R <= F or A < red_beta * U:
+        nominal = "red"
+    elif A < yellow_beta * U:
+        nominal = "yellow"
+    elif A >= green_beta * U and (h <= clearance_h or surplus >= green_surplus):
+        nominal = "green"
+    else:
+        nominal = "blue"
+
+    # Consumer may tighten tier if nominal is more conservative than controller runtime.tier
+    eff_tier = nominal if TIER_CONSERVATIVE_RANK[nominal] < TIER_CONSERVATIVE_RANK[raw_tier] else raw_tier
+
+    try:
+        max_age_s = float(usage.get("max_age_seconds", 600))
+    except Exception:
+        max_age_s = 600.0
+    age_s = (now_dt - observed_at).total_seconds() if observed_at is not None else 999999.0
+    is_expired = (valid_until is not None and now_dt > valid_until) or (age_s > max_age_s)
+
+    if is_expired:
+        # Same-cycle expiry rule: never stay green; keep more conservative of previous and blue
+        eff_tier = eff_tier if TIER_CONSERVATIVE_RANK[eff_tier] <= TIER_CONSERVATIVE_RANK["blue"] else "blue"
+        status = "stale_same_cycle"
+        reason = "stale_policy_fallback_to_conservative_blue"
+    else:
+        status = "fresh"
+        reason = "fresh_policy_surplus" if eff_tier == "green" else f"fresh_policy_tier_{eff_tier}"
+
+    return {
+        "tier": eff_tier,
+        "fallback_tier": eff_tier,
+        "raw_tier": raw_tier,
+        "nominal_tier": nominal,
+        "policy_revision": revision,
+        "status": status,
+        "reason": reason,
+        "usage_unknown": False,
+        "used_fraction": round(used_f, 4),
+        "remaining_fraction": round(R, 4),
+        "reserve_fraction": round(F, 4),
+        "beta": round(beta, 2),
+        "surplus": round(surplus, 4),
+        "hours_to_reset": round(h, 2),
+        "valid_until": policy.get("valid_until"),
+    }
+
+
+def check_policy_decision(
+    task_class: Optional[str] = None,
+    sensitivity: str = "public",
+    estimated_tokens: int = 0,
+    policy: Optional[Dict[str, Any]] = None,
+    policy_path: Optional[Path] = None,
+    allow_green_batch: bool = False,
+) -> Dict[str, Any]:
+    """Evaluate quota_policy.json and return routing decision (BYPASS_TO_PRIMARY / USE_FREE / POLICY_UNAVAILABLE)."""
+    resolved_path = get_quota_policy_path(policy_path)
+    loaded = policy if policy is not None else load_quota_policy(resolved_path)
+    view = effective_tier(loaded)
+
+    routing = (loaded or {}).get("routing") if isinstance((loaded or {}).get("routing"), dict) else {}
+    allowlist = set(routing.get("free_allowlist") or [
+        "public_text_classification",
+        "public_document_extraction",
+        "sanitized_log_preprocessing",
+        "public_summary",
+        "verified_low_risk_code_candidate",
+    ])
+    denylist = set(routing.get("free_denylist") or [
+        "restricted_data",
+        "security_sensitive_code",
+        "complex_reasoning",
+        "production_change_plan",
+        "high_impact_final_decision",
+    ])
+    free_target_map = routing.get("free_target") if isinstance(routing.get("free_target"), dict) else {
+        "green": 0.0,
+        "blue": 0.35,
+        "yellow": 0.65,
+        "red": 0.90,
+    }
+
+    sens_clean = (sensitivity or "public").strip().lower()
+    tc_clean = (task_class or "").strip()
+
+    restricted_sens = sens_clean in (
+        "restricted", "secret", "confidential", "internal", "private", "pii", "credentials"
+    )
+    denied_task = bool(tc_clean and tc_clean in denylist)
+    external_free_allowed = not (restricted_sens or denied_task)
+
+    if loaded is None:
+        decision = "POLICY_UNAVAILABLE"
+        tier = "unknown"
+        reason = "policy_missing_or_corrupt"
+        free_target = free_target_map.get("blue", 0.35)
+    elif not external_free_allowed:
+        decision = "BYPASS_TO_PRIMARY"
+        tier = view["tier"]
+        reason = "denylist_or_restricted_sensitivity"
+        free_target = 0.0
+    elif view["status"] == "cycle_expired":
+        # Only reachable when rollover is impossible/disabled (OR_FREE_POLICY_NO_ROLLOVER=1)
+        decision = "BYPASS_TO_PRIMARY"
+        tier = view["tier"]
+        reason = view["reason"]
+        free_target = free_target_map.get(tier, 0.35)
+    elif view["status"] == "usage_unknown":
+        # Live usage unknown: keep the unknown flag, but route at the conservative
+        # known default tier (blue 35% or tighter) instead of bypassing everything.
+        tier = view["tier"]
+        free_target = float(free_target_map.get(tier, 0.35))
+        if tc_clean and tc_clean not in allowlist and tc_clean not in ("auto", "general", "code", "long", "fast"):
+            decision = "BYPASS_TO_PRIMARY"
+            reason = f"task_class_not_in_free_allowlist:{tc_clean}"
+        else:
+            decision = "USE_FREE"
+            reason = view["reason"]
+    elif view["tier"] == "green":
+        tier = "green"
+        free_target = float(free_target_map.get("green", 0.0))
+        if allow_green_batch and (not tc_clean or tc_clean in allowlist):
+            decision = "USE_FREE"
+            reason = "green_batch_exception_allowlisted"
+        else:
+            decision = "BYPASS_TO_PRIMARY"
+            reason = view["reason"]
+    else:
+        tier = view["tier"]
+        free_target = float(free_target_map.get(tier, 0.35))
+        if tc_clean and tc_clean not in allowlist and tc_clean not in ("auto", "general", "code", "long", "fast"):
+            decision = "BYPASS_TO_PRIMARY"
+            reason = f"task_class_not_in_free_allowlist:{tc_clean}"
+        else:
+            decision = "USE_FREE"
+            reason = view["reason"]
+
+    return {
+        "decision": decision,
+        "tier": tier,
+        "policy_revision": view["policy_revision"],
+        "reason": reason,
+        "external_free_allowed": external_free_allowed,
+        "free_target": free_target,
+        "status": view["status"],
+        "usage_unknown": bool(view.get("usage_unknown")),
+        "used_fraction": view.get("used_fraction"),
+        "remaining_fraction": view.get("remaining_fraction"),
+        "beta": view.get("beta"),
+        "surplus": view.get("surplus"),
+        "hours_to_reset": view.get("hours_to_reset"),
+        "task_class": tc_clean or "auto",
+        "sensitivity": sens_clean,
+        "estimated_tokens": int(estimated_tokens or 0),
+        "policy_path": str(resolved_path),
+        "valid_until": view.get("valid_until"),
+    }
+
+
 # ── Core Chat Completion Dispatch with Proactive Watermark + Failover ─────────
 
 def call_single_candidate(
@@ -1910,6 +2338,11 @@ def chat_completion(
     model_rpd_watermark_override: Optional[int] = None,
     no_fallback: bool = False,
     caller: Optional[str] = None,
+    task_class: Optional[str] = None,
+    sensitivity: str = "public",
+    estimated_tokens: int = 0,
+    allow_green_batch: bool = False,
+    policy_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
     resolved_caller = detect_caller(caller)
     resolved_task = detect_task_type(prompt, task)
@@ -1945,6 +2378,33 @@ def chat_completion(
             task=resolved_task,
             prompt_text=prompt,
         )
+
+    # 2.5 Check Grok Ultra quota policy BEFORE sending any external free HTTP request
+    est_tok = estimated_tokens if estimated_tokens > 0 else max(1, len(combined_input) // 4)
+    policy_gate = check_policy_decision(
+        task_class=task_class,
+        sensitivity=sensitivity,
+        estimated_tokens=est_tok,
+        policy_path=policy_path,
+        allow_green_batch=allow_green_batch,
+    )
+    if policy_gate.get("decision") == "BYPASS_TO_PRIMARY":
+        append_audit_log(
+            caller=resolved_caller,
+            task=resolved_task,
+            route=f"QUOTA_POLICY:{policy_gate.get('tier', 'unknown')}",
+            status=f"BYPASS_TO_PRIMARY:{policy_gate.get('reason', '')}",
+            elapsed_ms=0.0,
+            tokens_in=0,
+            tokens_out=0,
+            prompt_text=prompt,
+            reply_text=f"Bypassed free pool (tier={policy_gate.get('tier')}, rev={policy_gate.get('policy_revision')})",
+        )
+        if as_json:
+            print(json.dumps(policy_gate, indent=2, ensure_ascii=False))
+        else:
+            print(json.dumps(policy_gate, ensure_ascii=False))
+        return policy_gate
 
     # 3. Resolve ordered multi-provider candidate chain
     state = load_router_state()
@@ -2128,7 +2588,7 @@ def chat_completion(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Zero-Cost Multi-Provider Router (OpenRouter :free + OB-1 Keyless Kilo/LLM7/OVH) with Proactive Watermarks, DLP Guard & 24h Auto-Zip Audit Logs."
+        description="检查 Grok Ultra 额度档位决定是否走免费模型 — Zero-Cost Multi-Provider Router (OpenRouter :free + OB-1 Keyless Kilo/LLM7/OVH) with Quota Policy Gate, Proactive Watermarks, DLP Guard & 24h Auto-Zip Audit Logs."
     )
     parser.add_argument("prompt", nargs="*", help="Prompt text (can also be piped via stdin)")
     parser.add_argument("-m", "--model", default=None, help="Explicit model ID (e.g. openrouter/cohere/north-mini-code:free or llm7/codestral-latest)")
@@ -2149,6 +2609,37 @@ def main() -> None:
     parser.add_argument("--model-rpd-watermark", type=int, default=None, help="Override per-model daily RPD proactive watermark (for testing/tuning)")
     parser.add_argument("--no-fallback", action="store_true", help="Disable failover when -m/--model is specified")
     parser.add_argument("--json", action="store_true", help="Output structured JSON response with routing telemetry")
+    parser.add_argument(
+        "--check-policy",
+        action="store_true",
+        help="检查 Grok Ultra 额度档位策略（读取 quota_policy.json；周期已过会本地惰性续期并原子写回），输出路由决策 JSON 并退出 (exit 0)",
+    )
+    parser.add_argument(
+        "--task-class",
+        default=None,
+        help="Optional task class for quota policy evaluation (e.g. public_summary, sanitized_log_preprocessing)",
+    )
+    parser.add_argument(
+        "--sensitivity",
+        default="public",
+        help="Data sensitivity level for quota policy evaluation (default: public; restricted/secret forces BYPASS_TO_PRIMARY)",
+    )
+    parser.add_argument(
+        "--estimated-tokens",
+        type=int,
+        default=0,
+        help="Estimated token workload for quota policy evaluation",
+    )
+    parser.add_argument(
+        "--green-batch-exception",
+        action="store_true",
+        help="Allow allowlisted batch tasks to use free pool even when tier=green (<=10%% exception cap)",
+    )
+    parser.add_argument(
+        "--policy-path",
+        default=None,
+        help="Override path to quota_policy.json (default: $OR_FREE_QUOTA_POLICY_PATH, else <OR_FREE_HOME>/quota_policy.json; missing file = no gating)",
+    )
     parser.add_argument(
         "--allow-unverified-model",
         action="store_true",
@@ -2204,6 +2695,18 @@ def main() -> None:
 
     # Load registry once AFTER CLI args, TTL policy, and explicit registry path are resolved
     _load_dynamic_registry()
+
+    if getattr(args, "check_policy", False):
+        p_path = Path(args.policy_path).expanduser() if getattr(args, "policy_path", None) else None
+        res = check_policy_decision(
+            task_class=getattr(args, "task_class", None),
+            sensitivity=getattr(args, "sensitivity", "public"),
+            estimated_tokens=getattr(args, "estimated_tokens", 0),
+            policy_path=p_path,
+            allow_green_batch=bool(getattr(args, "green_batch_exception", False)),
+        )
+        print(json.dumps(res, indent=2 if args.json else None, ensure_ascii=False))
+        sys.exit(0)
 
     if args.reset_state:
         sp = get_state_path()
@@ -2283,6 +2786,11 @@ def main() -> None:
         model_rpd_watermark_override=args.model_rpd_watermark,
         no_fallback=args.no_fallback,
         caller=args.caller,
+        task_class=getattr(args, "task_class", None),
+        sensitivity=getattr(args, "sensitivity", "public"),
+        estimated_tokens=getattr(args, "estimated_tokens", 0),
+        allow_green_batch=bool(getattr(args, "green_batch_exception", False)),
+        policy_path=Path(args.policy_path).expanduser() if getattr(args, "policy_path", None) else None,
     )
 
 

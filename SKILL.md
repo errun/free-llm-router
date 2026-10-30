@@ -4,12 +4,13 @@ description: >-
   Use when a user wants free AI models, cheap LLM alternatives, cost-free text
   generation, to save primary-agent tokens or reduce LLM API costs by offloading
   non-sensitive coding, summarization, or brainstorming tasks to free LLMs, find
-  OpenRouter :free models, refresh a multi-provider free-model registry, or set
-  up free-model routing for Grok Bot, Codex, Cursor, or Claude Code. Provides a
+  OpenRouter :free models, refresh a multi-provider free-model registry, set up
+  free-model routing for Grok Bot, Codex, Cursor, or Claude Code, or check the
+  Grok Ultra quota policy gate (--check-policy) before offloading. Provides a
   stdlib-only Python router (`or-free` / scripts/or_free.py) and catalog scanner
-  with zero-price catalog checks, curated keyless allowlists, and a partial
-  credential filter (DLP). Pricing and availability can change; zero billing is
-  not guaranteed.
+  with zero-price catalog checks, curated keyless allowlists, a quota policy
+  gate with automatic cycle renewal, and a partial credential filter (DLP).
+  Pricing and availability can change; zero billing is not guaranteed.
 ---
 # Free LLM Router (`or-free`)
 
@@ -69,6 +70,7 @@ description: >-
 ```bash
 SKILL_DIR="$HOME/agent-data/workflows/free-llm-router"
 python3 "$SKILL_DIR/scripts/or_free.py" --status
+python3 "$SKILL_DIR/scripts/or_free.py" --check-policy --json
 python3 "$SKILL_DIR/scripts/or_free.py" -t fast --max-tokens 64 "Say hello in 5 words"
 python3 "$SKILL_DIR/scripts/or_free.py" --caller "GrokBot" -t code --max-tokens 600 "Write a Python function to merge two sorted lists with doctests."
 python3 "$SKILL_DIR/scripts/or_free.py" -t general --max-tokens 400 "Summarize this public changelog in 5 bullets: ..."
@@ -92,9 +94,24 @@ python3 "$SKILL_DIR/scripts/scan_and_sync_free_models.py" --apply --json
 python3 "$SKILL_DIR/scripts/or_free.py" --validate-registry "$HOME/.config/or-free/or_free_models_registry.json"
 ```
 
+## Quota Policy Gate (Grok Ultra dynamic split)
+
+Before every call, `or_free.py` reads `quota_policy.json` (path: `OR_FREE_QUOTA_POLICY_PATH`, else `$OR_FREE_HOME/quota_policy.json`) and decides whether the task should stay on the primary model. No policy file → `POLICY_UNAVAILABLE`, no gating, calls go to the free pool as before.
+
+- **Check first:** `python3 "$SKILL_DIR/scripts/or_free.py" --check-policy --json` (always exit 0). Read the `decision` field:
+  - `USE_FREE` → offload; `BYPASS_TO_PRIMARY` → do it on the primary model; `POLICY_UNAVAILABLE` → offload normally.
+- **BYPASS caveat:** when a normal call is gated to `BYPASS_TO_PRIMARY`, it prints one decision JSON line, sends no request, and **exits 0 with no model reply**. Callers must check `decision`, not only the exit code.
+- **Tiers by β** (remaining quota after ~5% reserve ÷ remaining time fraction): green 0% free (use Ultra before it expires), blue 35%, yellow 65%, red 90% (`routing.free_target`).
+- **Auto-renewal:** if `cycle.reset_at` has passed, the policy rolls to the cycle containing now (same length, default 7 days), sets `usage.status=unknown`, tier blue, `revision+1`, backs up `quota_policy.json.pre-rollover.<rev>`, and atomically writes back (0 tokens, no cron). `OR_FREE_POLICY_NO_ROLLOVER=1` renews in memory only.
+- **Usage unknown** → conservative blue (35%) `USE_FREE`, never a blanket bypass. Write `usage.status=known` + `used_fraction` to restore exact β tiers.
+- **Always bypass:** `--sensitivity` other than `public` (internal/restricted/secret/confidential/private/pii/credentials), and denylisted `--task-class` (restricted_data, security_sensitive_code, complex_reasoning, production_change_plan, high_impact_final_decision). Allowlist: public_text_classification, public_document_extraction, sanitized_log_preprocessing, public_summary, verified_low_risk_code_candidate.
+- Other flags: `--estimated-tokens N`, `--green-batch-exception`, `--policy-path PATH`.
+- Status values: `fresh`, `stale_same_cycle`, `usage_unknown`, `cycle_expired` (only when renewal is disabled/impossible), `policy_unavailable`.
+- Policy JSON: required `cycle{starts_at, reset_at, cycle_id}`, `usage{status, used_fraction, observed_at, max_age_seconds}`, `runtime{tier}`; optional `revision`, `valid_until`, `writer_id`, `thresholds{...}`, `routing{free_allowlist, free_denylist, free_target}`, `rollover{...}`.
+
 ## Exit Codes
 
-- `0`: Success (response printed to stdout; check `http_status == 200` and `content` in `--json` mode).
+- `0`: Success (response printed to stdout; check `http_status == 200` and `content` in `--json` mode). Also returned by `--check-policy` and by a quota-gated `BYPASS_TO_PRIMARY` (decision JSON only, no reply).
 - `1`: All route candidates failed/exhausted, general runtime error, or state lock/persistence failure.
 - `2`: Target model blocked by zero-cost policy gate (`is_safe_free_target` failed: paid model, missing catalog `$0/$0` proof, or unverified provider without `--allow-unverified-model`).
 - `3`: Prompt blocked by local partial credential filter (DLP).

@@ -117,11 +117,45 @@ SKILL_DIR="$HOME/agent-data/workflows/free-llm-router" && python3 "$SKILL_DIR/sc
 
 Primary agent: pick 1–2 names from the list after a quick sanity check; do not regenerate a competing list.
 
+## 3d. Quota policy gate (`--check-policy`)
+
+Check the Grok Ultra split before offloading. With no `quota_policy.json`, behavior is unchanged (`POLICY_UNAVAILABLE`, then the free pool). `--check-policy` always exits `0`.
+
+```bash
+SKILL_DIR="$HOME/agent-data/workflows/free-llm-router" && python3 "$SKILL_DIR/scripts/or_free.py" --check-policy --json
+```
+
+Read `decision`: `USE_FREE` means offload; `BYPASS_TO_PRIMARY` means keep the task on the primary model; `POLICY_UNAVAILABLE` means offload as before.
+
+**`BYPASS_TO_PRIMARY` exits `0` with no model reply** (one decision JSON line, no provider request). Check `decision` before treating stdout as an answer.
+
+Place a policy file at `$OR_FREE_HOME/quota_policy.json` (or set `OR_FREE_QUOTA_POLICY_PATH`). An expired cycle rolls forward to tier `blue` with `usage.status` `unknown`. Minimal placeholder:
+
+```json
+{
+  "revision": 1,
+  "cycle": {
+    "cycle_id": "example-cycle",
+    "starts_at": "2026-01-01T00:00:00Z",
+    "reset_at": "2026-01-08T00:00:00Z"
+  },
+  "usage": {
+    "status": "unknown",
+    "used_fraction": null,
+    "observed_at": null,
+    "max_age_seconds": 600
+  },
+  "runtime": {
+    "tier": "blue"
+  }
+}
+```
+
 ## 4. Accurate Exit Code Reference
 
 | Exit Code | Meaning |
 |---:|---|
-| `0` | **Success:** route candidate returned a response (or `--status` / `--validate-registry` succeeded). |
+| `0` | **Success:** route candidate returned a response, or `--status` / `--validate-registry` / `--check-policy` succeeded. A quota-gated `BYPASS_TO_PRIMARY` also exits `0` with decision JSON only (no model reply) — check `decision`. |
 | `1` | **All candidates failed / runtime or lock error:** all allowed route candidates failed/exhausted, general runtime error, or state lock/persistence failure. |
 | `2` | **Blocked by zero-cost policy gate:** requested model/provider failed `is_safe_free_target` (paid model, missing `$0/$0` catalog proof, or unverified provider without `--allow-unverified-model`). |
 | `3` | **Blocked by local DLP filter:** prompt matched the partial credential filter before any network request. |
