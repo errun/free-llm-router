@@ -10,6 +10,14 @@ Hard guarantees (best-effort local enforcement; provider catalogs can change):
    - nvidia/routeopen: disabled by default for strangers (opt-in + verified free + key)
 2. DLP (exit 3): Block private keys, API tokens, bearer tokens, password assignments,
    and [SECRET]/[涉密] markers before any external HTTP request.
+2b. DEFAULT-DENY CONTENT GATE (exit 0 + BYPASS_TO_PRIMARY, no reply): only prompts tagged
+   with an allowlisted --task-class (public_research, public_copy, brainstorm,
+   general_knowledge, sanitized_data, public_summary, sanitized_log_preprocessing,
+   public_text_classification, public_document_extraction) may reach free models.
+   Missing/auto/general/code/long/fast/unknown classes stay on the primary model.
+   A local code/config/infra scanner (code fences, source lines, JSON/YAML/INI/.env,
+   nginx/docker/k8s/ssh config, IPs, internal hosts, local paths, connection strings,
+   ports, non-public URLs) forces BYPASS_TO_PRIMARY even for allowlisted classes.
 3. Portable paths: OR_FREE_HOME / XDG_CONFIG_HOME / ~/.config/or-free (no hardcoded
    machine-specific absolute home literals). Bundled registry beside this script is the seed.
 4. Proactive watermarks + 24h audit metadata logs (optional --audit-preview for text previews).
@@ -692,6 +700,155 @@ SECRET_PATTERNS: List[Tuple[str, re.Pattern]] = [
     ("Password Assignment", re.compile(r"(?i)\b(?:password|passwd|pwd)\s*[:=]\s*\S{6,}")),
     ("Explicit Secret Marker", re.compile(r"(?:\[SECRET\]|\[CONFIDENTIAL\]|\[涉密\]|【涉密】|绝密数据)", re.IGNORECASE)),
 ]
+
+# ── Default-deny content policy (approved by owner 2026-10-31) ───────────────
+# Only these task classes may EVER be routed to external free models. Everything
+# else (missing, auto/general/code/long/fast, unknown, policy-file additions) goes
+# to the primary model. quota_policy.json `routing.free_allowlist` can only NARROW
+# this set; it can never widen it.
+FREE_TASK_CLASS_ALLOWLIST = frozenset({
+    "public_research",              # public news/docs/open-source/competitor public info
+    "public_copy",                  # marketing copy, store text, tweets, polish/translation of public text
+    "brainstorm",                   # names, outlines, idea lists
+    "general_knowledge",            # generic explanations without our code
+    "sanitized_data",               # already de-identified logs/data
+    "public_summary",               # legacy: summary of public material
+    "sanitized_log_preprocessing",  # legacy: de-identified logs
+    "public_text_classification",   # legacy: classify public text
+    "public_document_extraction",   # legacy: extract from public documents
+})
+DEFAULT_FREE_DENYLIST = frozenset({
+    "restricted_data",
+    "security_sensitive_code",
+    "complex_reasoning",
+    "production_change_plan",
+    "high_impact_final_decision",
+    "verified_low_risk_code_candidate",
+    "code",
+})
+FREE_ALLOWED_SENSITIVITIES = frozenset({"public", "sanitized", "deidentified", "de-identified"})
+
+_CODE_EXT = (r"py|pyi|cs|cpp|cc|cxx|hpp|hh|java|kt|kts|go|rs|rb|php|swift|mm|gradle|sh|bash|zsh|ps1|bat|cmd|"
+             r"lua|dart|scala|sql|vue|svelte|jsx|tsx|mjs|cjs|shader|hlsl|glsl|cginc|asmdef|prefab|unity|asset|meta|"
+             r"yaml|yml|toml|ini|cfg|conf|env|json|xml|plist|properties|tf|tfvars|hcl|proto|csproj|sln|pem|crt")
+_CODE_EXT_DIR = _CODE_EXT + r"|js|ts|c|h|m|key|lock|meta|asset"
+def _rc(pattern: str) -> re.Pattern:
+    return re.compile(pattern, re.MULTILINE)
+
+
+_CONTENT_SCAN_RULES: List[Tuple[str, re.Pattern]] = [
+    ("code_fence", _rc(r"(?m)^\s*(?:```|~~~)")),
+    ("shebang", _rc(r"(?m)^#!\s*/")),
+    ("python_def_class", _rc(r"\b(?:async\s+)?def\s+\w+\s*\([^)]*\)\s*(?:->\s*[\w\[\], .]+)?:|^[ \t]+(?:return|yield|raise|pass|continue|break)\b|^\s*(?:async\s+)?def\s+\w+\s*\(|^\s*class\s+\w+\s*[(:{<]|^\s*class\s+\w+\s*$")),
+    ("import_statement", _rc(r"(?m)^\s*(?:import\s+[\w.*{}, ]+(?:\s+from\s+['\"][^'\"]+['\"])?\s*;?\s*$|from\s+[\w.]+\s+import\s+\S|import\s+[\w.]+\s+as\s+\w+)")),
+    ("c_include_or_using", _rc(r"(?m)^\s*(?:#\s*include\s*[<\"]|#\s*(?:define|ifdef|ifndef|pragma)\b|using\s+(?:static\s+)?[\w.]+\s*(?:=\s*[\w.]+\s*)?;|package\s+[\w.]+\s*;?\s*$|namespace\s+[\w.]+)")),
+    ("js_function", _rc(r"\bfunction\s*\w*\s*\([^)]*\)\s*\{|=>\s*\{|\b(?:const|let|var)\s+\w+\s*=\s*\S")),
+    ("access_modifier_decl", _rc(r"(?m)^\s*(?:public|private|protected|internal)\s+(?:static\s+|readonly\s+|override\s+|virtual\s+|async\s+|abstract\s+|sealed\s+|final\s+)*[\w<>\[\],.?]+\s*[\w<>\[\]]*\s*[({=;:]")),
+    ("code_block_syntax", _rc(r"\w\s*\([^()\n]*\)\s*(?:\{|->)|^\s*\}\s*(?:else\b.*)?$|\[SerializeField\]|\bstd::|\b(?:fn|func|struct|impl|enum|interface)\s+\w+\s*[({<]")),
+    ("sql_statement", _rc(r"\bselect\s+\*\s+from\s+\w|\b(?:SELECT\s+[\w*,\s.]+\s+FROM\s+\w|INSERT\s+INTO\s+\w|UPDATE\s+\w+\s+SET\s|DELETE\s+FROM\s+\w|CREATE\s+(?:TABLE|INDEX|DATABASE)\s|ALTER\s+TABLE\s)")),
+    ("stack_trace", _rc(r"Traceback \(most recent call last\)|^\s+at\s+[\w.$<>`]+\(.*\)|^\s*File \"[^\"]+\", line \d+")),
+    ("json_object", _rc(r"\{\s*\"[^\"\n]{1,80}\"\s*:\s*[\"\[{0-9tfn-]")),
+    ("dotenv_assignment", _rc(r"(?m)^\s*(?:export\s+)?[A-Z][A-Z0-9_]{2,}\s*=\s*\S")),
+    ("ini_section", _rc(r"(?m)^\s*\[[\w.\- :\"]+\]\s*$")),
+    ("k8s_or_compose", _rc(r"(?m)^\s*(?:apiVersion|kind|metadata|spec|containers|volumeMounts|services|image|replicas|namespace|selector|ports|env|volumes|depends_on|healthcheck)\s*:")),
+    ("dockerfile", _rc(r"(?m)^\s*(?:FROM\s+[\w.\-/]+(?::[\w.\-]+)?(?:\s+AS\s+\w+)?\s*$|RUN\s+(?:apt|apk|yum|dnf|pip|npm|yarn|pnpm|cd|mkdir|chmod|chown|curl|wget|\[|set\s|echo|cp|mv|rm|go|dotnet|make|bash|sh|python|useradd)\b|(?:COPY|ADD)\s+(?:--\w+(?:=\S+)?\s+)*\S+\s+[\w.\-]*[./]\S*\s*$|EXPOSE\s+\d|ENTRYPOINT\s*\[|CMD\s*\[|WORKDIR\s+/)")),
+    ("nginx_config", _rc(r"\b(?:server|location|upstream|http|events)\s+[^\n{;]*\{|\blisten\s+(?:\[?[\w.:]*\]?:)?\d+\s*(?:ssl|http2|default_server|;)|\b(?:proxy_pass|server_name|ssl_certificate|root\s+/|fastcgi_pass|add_header)\b")),
+    ("ssh_config", _rc(r"(?mi)^\s*(?:HostName|IdentityFile|ProxyJump|ProxyCommand|StrictHostKeyChecking|ForwardAgent)\s+\S|\bssh\s+(?:-\w+\s+\S+\s+)*[\w.\-]+@[\w.\-]+|\bscp\s+\S+\s+[\w.\-]+@")),
+    ("shell_command", _rc(r"(?m)^\s*(?:\$\s+)?(?:sudo|cd|ls|cat|grep|curl|wget|chmod|chown|systemctl|kubectl|docker|helm|terraform|git|npm|yarn|pip|apt|brew|ssh|scp|rsync|export)\s+[-\w./~$\"']")),
+    ("ipv4_address", _rc(r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b")),
+    ("ipv6_address", _rc(r"(?i)(?<![\w:])(?:[0-9a-f]{1,4}:){3,7}[0-9a-f]{1,4}(?![\w:])|(?<![\w:])(?:[0-9a-f]{1,4}:){1,6}:(?:[0-9a-f]{1,4})?(?![\w:])|(?<![\w:])::(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4}(?![\w:])|::ffff:")),
+    ("internal_hostname", _rc(r"(?i)\blocalhost\b|\b[\w\-]+(?:\.[\w\-]+)*\.(?:local|lan|internal|intranet|intra|corp|home\.arpa|localdomain|svc|cluster\.local|private|test|example|invalid)\b|\b(?:git|gitlab|jenkins|jira|confluence|wiki|intranet|internal|dev|devel|staging|stage|stg|test|qa|uat|preprod|admin|vpn|corp|ci|cd|build|grafana|kibana|prometheus|sentry|nexus|artifactory|harbor|registry|k8s|kube|rancher|console|dashboard|db|mysql|pg|postgres|redis|mongo|kafka|elastic|es|ldap|ad|sso|oa|erp|crm|nas|svn)(?:[\-\d][\w\-]*)?\.[\w\-]+\.[a-z]{2,}\b")),
+    ("local_file_path", _rc(r"(?i)/Users/|/home/\w|[A-Z]:\\\\|[A-Z]:\\|\\\\\\\\[\w.\-]+\\\\|(?<![\w.])/(?:etc|var|opt|usr|srv|root|tmp|mnt|private|proc|sys|data|workspace|app|Library|Applications|Volumes)/|(?<![\w/])~/[\w.\-]")),
+    ("source_or_config_filename", _rc(r"(?i)(?:[\w\-.]+/)+[\w\-.]+\.(?:" + _CODE_EXT_DIR + r")\b|(?<![\w.])[\w\-]+\.(?:" + _CODE_EXT + r")\b|(?<![\w])\.(?:env|npmrc|pypirc|netrc|gitconfig|bashrc|zshrc|ssh)\b|\b(?:Dockerfile|Makefile|docker-compose|nginx\.conf|Jenkinsfile|Podfile|Gemfile|package\.json|pom\.xml|build\.gradle|AndroidManifest\.xml)\b")),
+    ("connection_string", _rc(r"(?i)\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|rediss|amqp|amqps|mssql|sqlserver|oracle|ldap|ldaps|ftp|sftp|ssh|smb|nfs|kafka|nats|mqtt|ws|wss|grpc|jdbc:\w+|s3|gs|hdfs)://|\b(?:Server|Data Source|Host|Database|Initial Catalog|User ID|Uid|Pwd)\s*=\s*[^;\n]+;|\bDSN\s*=")),
+    ("host_port", _rc(r"(?i)\b(?:[a-z][\w\-]*(?:\.[\w\-]+)*|\d{1,3}(?:\.\d{1,3}){3}):\d{2,5}\b(?!\s*(?:am|pm))|\bport\s*[:=]\s*\d{2,5}\b|--port[=\s]+\d+")),
+    ("non_public_url", _rc(r"(?i)\bhttps?://(?:[^/\s:]+\.(?:local|lan|internal|intranet|intra|corp|localdomain|svc|private)\b|localhost\b|\d{1,3}(?:\.\d{1,3}){3}\b|\[[0-9a-f:]+\]|[^/\s.:]+(?=[:/\s]|$)|[^/\s]+:\d{2,5})")),
+]
+_CODE_LINE_RE = re.compile(r"(?:;\s*$|^\s*[{}]\s*$|\{\s*$|^\s*(?:return|if|elif|else|for|while|switch|case|try|catch|except|finally|throw|raise|yield|await|break|continue)\b.*[:;{(]|^\s*@\w+(?:\(|\s*$)|^\s*//|^\s*/\*|\w+\.\w+\([^)]*\)\s*;?\s*$|^\s*\w+(?:\.\w+)*\s*[+\-*/]?=\s*[\w\"'\[({])")
+_KV_LINE_RE = re.compile(r"^\s*[A-Za-z0-9_.\-\"']{1,60}\s*(?:=|:)\s*\S")
+_YAML_NESTED_RE = re.compile(r"^\s{2,}(?:-\s+)?[a-z_][\w.\-]*\s*:(?:\s|$)")
+
+
+def _extra_internal_domains() -> List[str]:
+    """Comma-separated company domains in OR_FREE_INTERNAL_DOMAINS are always private."""
+    raw = os.environ.get("OR_FREE_INTERNAL_DOMAINS", "")
+    return [d.strip().lower().lstrip(".") for d in raw.split(",") if d.strip()]
+
+
+def scan_code_or_infra(text: str) -> Optional[str]:
+    """Local, offline heuristic: return a reason label if text looks like source code,
+    config/infra, or references private infrastructure; None if it looks like plain prose.
+    Tuned to over-block (false positives go to the primary model, which is safe)."""
+    if not text or not text.strip():
+        return None
+    for label, pat in _CONTENT_SCAN_RULES:
+        if pat.search(text):
+            return label
+    low = text.lower()
+    for dom in _extra_internal_domains():
+        if dom and dom in low:
+            return "configured_internal_domain"
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    code_lines = sum(1 for ln in lines if _CODE_LINE_RE.search(ln))
+    if code_lines >= 2:
+        return f"code_like_lines:{code_lines}"
+    kv_lines = sum(1 for ln in lines if _KV_LINE_RE.match(ln) and not re.match(r"^\s*[A-Z][a-z]+(?: [A-Za-z]+)*\s*:\s", ln))
+    if kv_lines >= 2:
+        return f"config_key_value_lines:{kv_lines}"
+    if sum(1 for ln in lines if _YAML_NESTED_RE.match(ln)) >= 1:
+        return "yaml_nested_block"
+    inline = re.findall(r"`([^`\n]+)`", text)
+    if any(re.search(r"[(){};=<>/\\\[\]$]|\w\.\w|_\w", frag) for frag in inline):
+        return "inline_code_span"
+    stripped = re.sub(r"\s+", "", text)
+    if len(stripped) >= 60:
+        sym = sum(1 for ch in stripped if ch in "{}()[];=<>|&\\")
+        if sym / len(stripped) > 0.07:
+            return "high_code_symbol_density"
+    return None
+
+
+def content_route_gate(
+    task_class: Optional[str],
+    sensitivity: str,
+    content: Optional[str],
+    allowlist: Optional[set] = None,
+    denylist: Optional[set] = None,
+) -> Dict[str, Any]:
+    """Default-deny gate applied before any quota logic. Returns
+    {allowed, reason, dlp_blocked, content_scanned, scan_hit}."""
+    tc = (task_class or "").strip()
+    tc_l = tc.lower()
+    sens = (sensitivity or "public").strip().lower()
+    eff_allow = set(FREE_TASK_CLASS_ALLOWLIST) if allowlist is None else (set(allowlist) & set(FREE_TASK_CLASS_ALLOWLIST))
+    eff_deny = set(DEFAULT_FREE_DENYLIST) | set(denylist or [])
+    out: Dict[str, Any] = {"allowed": False, "reason": "", "dlp_blocked": False,
+                           "content_scanned": content is not None and bool(str(content).strip()), "scan_hit": None}
+    if content is not None and str(content).strip():
+        secret = check_sensitive_content(str(content))
+        if secret:
+            out.update(reason=f"dlp_blocked:{secret}", dlp_blocked=True, scan_hit=f"dlp:{secret}")
+            return out
+    if not tc or tc_l in ("auto", "general", "code", "long", "fast"):
+        out["reason"] = f"default_deny_task_class:{tc_l or 'missing'}"
+        return out
+    if tc_l in eff_deny:
+        out["reason"] = f"task_class_denylisted:{tc_l}"
+        return out
+    if tc_l not in eff_allow:
+        out["reason"] = f"task_class_not_in_free_allowlist:{tc_l}"
+        return out
+    if sens not in FREE_ALLOWED_SENSITIVITIES:
+        out["reason"] = f"sensitivity_not_public:{sens}"
+        return out
+    if content is not None and str(content).strip():
+        hit = scan_code_or_infra(str(content))
+        if hit:
+            out.update(reason=f"content_scan_code_or_infra:{hit}", scan_hit=hit)
+            return out
+    out["allowed"] = True
+    out["reason"] = "allowlisted_task_class" + ("" if out["content_scanned"] else "_content_not_scanned")
+    return out
 
 
 def get_state_path() -> Path:
@@ -2125,27 +2282,30 @@ def check_policy_decision(
     policy: Optional[Dict[str, Any]] = None,
     policy_path: Optional[Path] = None,
     allow_green_batch: bool = False,
+    content: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Evaluate quota_policy.json and return routing decision (BYPASS_TO_PRIMARY / USE_FREE / POLICY_UNAVAILABLE)."""
+    """Evaluate default-deny content gate + quota_policy.json and return routing decision
+    (BYPASS_TO_PRIMARY / USE_FREE / POLICY_UNAVAILABLE). Untagged or non-allowlisted task
+    classes, and prompts that look like code/config/infra, always get BYPASS_TO_PRIMARY."""
     resolved_path = get_quota_policy_path(policy_path)
     loaded = policy if policy is not None else load_quota_policy(resolved_path)
     view = effective_tier(loaded)
 
     routing = (loaded or {}).get("routing") if isinstance((loaded or {}).get("routing"), dict) else {}
-    allowlist = set(routing.get("free_allowlist") or [
-        "public_text_classification",
-        "public_document_extraction",
-        "sanitized_log_preprocessing",
-        "public_summary",
-        "verified_low_risk_code_candidate",
-    ])
-    denylist = set(routing.get("free_denylist") or [
-        "restricted_data",
-        "security_sensitive_code",
-        "complex_reasoning",
-        "production_change_plan",
-        "high_impact_final_decision",
-    ])
+    # Policy file may only NARROW the hardcoded allowlist; unknown/legacy code classes are ignored.
+    policy_allow_raw = routing.get("free_allowlist")
+    if isinstance(policy_allow_raw, list) and policy_allow_raw:
+        policy_allow = {str(x).strip().lower() for x in policy_allow_raw}
+        narrowed = policy_allow & set(FREE_TASK_CLASS_ALLOWLIST)
+        # A legacy policy listing only old classes must not silently disable the new ones:
+        # narrowing applies only if the policy names at least one of the new default-deny classes.
+        new_classes = {"public_research", "public_copy", "brainstorm", "general_knowledge", "sanitized_data"}
+        allowlist = narrowed if (policy_allow & new_classes) else set(FREE_TASK_CLASS_ALLOWLIST)
+        ignored_policy_allow = sorted(policy_allow - set(FREE_TASK_CLASS_ALLOWLIST))
+    else:
+        allowlist = set(FREE_TASK_CLASS_ALLOWLIST)
+        ignored_policy_allow = []
+    denylist = set(DEFAULT_FREE_DENYLIST) | {str(x).strip().lower() for x in (routing.get("free_denylist") or [])}
     free_target_map = routing.get("free_target") if isinstance(routing.get("free_target"), dict) else {
         "green": 0.0,
         "blue": 0.35,
@@ -2154,24 +2314,22 @@ def check_policy_decision(
     }
 
     sens_clean = (sensitivity or "public").strip().lower()
-    tc_clean = (task_class or "").strip()
+    tc_clean = (task_class or "").strip().lower()
 
-    restricted_sens = sens_clean in (
-        "restricted", "secret", "confidential", "internal", "private", "pii", "credentials"
-    )
-    denied_task = bool(tc_clean and tc_clean in denylist)
-    external_free_allowed = not (restricted_sens or denied_task)
+    gate = content_route_gate(tc_clean, sens_clean, content, allowlist=allowlist, denylist=denylist)
+    external_free_allowed = bool(gate["allowed"])
 
-    if loaded is None:
+    if not external_free_allowed:
+        # Default-deny content gate wins over everything, including a missing policy file.
+        decision = "BYPASS_TO_PRIMARY"
+        tier = view["tier"] if loaded is not None else "unknown"
+        reason = gate["reason"]
+        free_target = 0.0
+    elif loaded is None:
         decision = "POLICY_UNAVAILABLE"
         tier = "unknown"
         reason = "policy_missing_or_corrupt"
         free_target = free_target_map.get("blue", 0.35)
-    elif not external_free_allowed:
-        decision = "BYPASS_TO_PRIMARY"
-        tier = view["tier"]
-        reason = "denylist_or_restricted_sensitivity"
-        free_target = 0.0
     elif view["status"] == "cycle_expired":
         # Only reachable when rollover is impossible/disabled (OR_FREE_POLICY_NO_ROLLOVER=1)
         decision = "BYPASS_TO_PRIMARY"
@@ -2183,16 +2341,13 @@ def check_policy_decision(
         # known default tier (blue 35% or tighter) instead of bypassing everything.
         tier = view["tier"]
         free_target = float(free_target_map.get(tier, 0.35))
-        if tc_clean and tc_clean not in allowlist and tc_clean not in ("auto", "general", "code", "long", "fast"):
-            decision = "BYPASS_TO_PRIMARY"
-            reason = f"task_class_not_in_free_allowlist:{tc_clean}"
-        else:
-            decision = "USE_FREE"
-            reason = view["reason"]
+        # Task class already passed the default-deny gate above (allowlisted + content scan).
+        decision = "USE_FREE"
+        reason = view["reason"]
     elif view["tier"] == "green":
         tier = "green"
         free_target = float(free_target_map.get("green", 0.0))
-        if allow_green_batch and (not tc_clean or tc_clean in allowlist):
+        if allow_green_batch and tc_clean in allowlist:
             decision = "USE_FREE"
             reason = "green_batch_exception_allowlisted"
         else:
@@ -2201,12 +2356,9 @@ def check_policy_decision(
     else:
         tier = view["tier"]
         free_target = float(free_target_map.get(tier, 0.35))
-        if tc_clean and tc_clean not in allowlist and tc_clean not in ("auto", "general", "code", "long", "fast"):
-            decision = "BYPASS_TO_PRIMARY"
-            reason = f"task_class_not_in_free_allowlist:{tc_clean}"
-        else:
-            decision = "USE_FREE"
-            reason = view["reason"]
+        # Task class already passed the default-deny gate above (allowlisted + content scan).
+        decision = "USE_FREE"
+        reason = view["reason"]
 
     return {
         "decision": decision,
@@ -2222,8 +2374,15 @@ def check_policy_decision(
         "beta": view.get("beta"),
         "surplus": view.get("surplus"),
         "hours_to_reset": view.get("hours_to_reset"),
-        "task_class": tc_clean or "auto",
+        "task_class": tc_clean or "missing",
         "sensitivity": sens_clean,
+        "content_gate": "pass" if external_free_allowed else "deny",
+        "content_scanned": gate["content_scanned"],
+        "content_scan_hit": gate["scan_hit"],
+        "dlp_blocked": gate["dlp_blocked"],
+        "blocked": gate["dlp_blocked"],
+        "allowed_task_classes": sorted(allowlist),
+        "policy_allowlist_ignored": ignored_policy_allow,
         "estimated_tokens": int(estimated_tokens or 0),
         "policy_path": str(resolved_path),
         "valid_until": view.get("valid_until"),
@@ -2387,6 +2546,7 @@ def chat_completion(
         estimated_tokens=est_tok,
         policy_path=policy_path,
         allow_green_batch=allow_green_batch,
+        content=combined_input,
     )
     if policy_gate.get("decision") == "BYPASS_TO_PRIMARY":
         append_audit_log(
@@ -2612,17 +2772,26 @@ def main() -> None:
     parser.add_argument(
         "--check-policy",
         action="store_true",
-        help="检查 Grok Ultra 额度档位策略（读取 quota_policy.json；周期已过会本地惰性续期并原子写回），输出路由决策 JSON 并退出 (exit 0)",
+help="检查 Grok Ultra 额度档位策略 + 默认拒绝内容闸门（读取 quota_policy.json；周期已过会本地惰性续期并原子写回），输出路由决策 JSON 并退出 (always exit 0). Pass the prompt (positional or --prompt-file) so DLP and the code/config scanner run; DLP hits return decision=BYPASS_TO_PRIMARY with dlp_blocked=true",
     )
     parser.add_argument(
         "--task-class",
         default=None,
-        help="Optional task class for quota policy evaluation (e.g. public_summary, sanitized_log_preprocessing)",
+        help="REQUIRED for free routing (default-deny). Allowed: " + ", ".join(sorted(FREE_TASK_CLASS_ALLOWLIST))
+             + ". Missing/auto/general/code/long/fast/other => BYPASS_TO_PRIMARY (exit 0, no reply). "
+               "Prompts that look like code/config/infra (code fences, source lines, JSON/YAML/INI/.env, "
+               "nginx/docker/k8s/ssh, IPs, internal hosts, local paths, connection strings, ports, "
+               "non-public URLs) also bypass. Extra private domains: OR_FREE_INTERNAL_DOMAINS=a.com,b.io",
     )
     parser.add_argument(
         "--sensitivity",
         default="public",
-        help="Data sensitivity level for quota policy evaluation (default: public; restricted/secret forces BYPASS_TO_PRIMARY)",
+        help="Data sensitivity (default: public). Only public/sanitized/deidentified may use free models; anything else forces BYPASS_TO_PRIMARY",
+    )
+    parser.add_argument(
+        "--prompt-file",
+        default=None,
+        help="With --check-policy: file whose content is DLP/code-scanned ('-' = stdin). Positional prompt text is also scanned.",
     )
     parser.add_argument(
         "--estimated-tokens",
@@ -2698,12 +2867,29 @@ def main() -> None:
 
     if getattr(args, "check_policy", False):
         p_path = Path(args.policy_path).expanduser() if getattr(args, "policy_path", None) else None
+        cp_parts = []
+        if args.prompt:
+            cp_parts.append(" ".join(args.prompt))
+        if getattr(args, "prompt_file", None):
+            try:
+                if args.prompt_file == "-":
+                    cp_parts.append(sys.stdin.read())
+                else:
+                    cp_parts.append(Path(args.prompt_file).expanduser().read_text(encoding="utf-8", errors="replace"))
+            except Exception as exc:
+                # Unreadable content => cannot prove it is safe => deny (still exit 0).
+                cp_parts.append("```unreadable prompt file```")
+                sys.stderr.write(f"[WARN] --prompt-file unreadable ({type(exc).__name__}); treating as code\n")
+        if args.system:
+            cp_parts.insert(0, args.system)
+        cp_content = "\n".join(cp_parts) if cp_parts else None
         res = check_policy_decision(
             task_class=getattr(args, "task_class", None),
             sensitivity=getattr(args, "sensitivity", "public"),
             estimated_tokens=getattr(args, "estimated_tokens", 0),
             policy_path=p_path,
             allow_green_batch=bool(getattr(args, "green_batch_exception", False)),
+            content=cp_content,
         )
         print(json.dumps(res, indent=2 if args.json else None, ensure_ascii=False))
         sys.exit(0)

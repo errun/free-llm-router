@@ -1,6 +1,6 @@
 # Free LLM Router (`or-free`): OpenRouter and Multi-Provider Catalog Scanner
 
-Save primary-agent tokens and reduce LLM API costs by routing **non-sensitive** coding, summarization, and brainstorming subtasks to free LLMs (OpenRouter `:free`, Kilo, OVH, LLM7) from **Grok Bot, Cursor, Claude Code, Codex**, or any Python agent — stdlib-only, with a multi-provider free-model catalog scanner.
+Save primary-agent tokens and reduce LLM API costs by routing **allowlisted public tasks** to free LLMs (OpenRouter `:free`, Kilo, OVH, LLM7) from **Grok Bot, Cursor, Claude Code, Codex**, or any Python agent — stdlib-only, with a multi-provider free-model catalog scanner. **Default-deny:** only prompts tagged with an allowlisted `--task-class` (`public_research`, `public_copy`, `brainstorm`, `general_knowledge`, `sanitized_data`, `public_summary`, `sanitized_log_preprocessing`, `public_text_classification`, `public_document_extraction`) may reach a free model. Coding tasks (`-t code` / `--task-class code`) and untagged prompts return `BYPASS_TO_PRIMARY` (exit 0, no model reply) and stay on the primary model.
 
 - **Prerequisites:** Python 3.9+ (standard library only; zero `pip install` dependencies).
 - **Identity & Invocation:** skill folder `free-llm-router` → CLI brand `or-free` → script `"$SKILL_DIR/scripts/or_free.py"`. Copying this folder does **not** install a global `or-free` binary on `PATH`; always invoke `python3 "$SKILL_DIR/scripts/or_free.py"` (or define an optional shell alias).
@@ -37,7 +37,7 @@ Because agents run shell commands from `/workspace` or your project root (not in
 SKILL_DIR="$HOME/agent-data/workflows/free-llm-router"
 python3 "$SKILL_DIR/scripts/or_free.py" --status
 python3 "$SKILL_DIR/scripts/scan_and_sync_free_models.py" --apply
-python3 "$SKILL_DIR/scripts/or_free.py" -t fast --max-tokens 64 "Say hello in 5 words"
+python3 "$SKILL_DIR/scripts/or_free.py" -t fast --task-class general_knowledge --max-tokens 64 "Say hello in 5 words"
 ```
 
 **Expected first-run behavior & cold-start troubleshooting:**
@@ -45,15 +45,16 @@ python3 "$SKILL_DIR/scripts/or_free.py" -t fast --max-tokens 64 "Say hello in 5 
   - *What `SKIP (waiting_for_key)` means:* normal in 0-key mode; the router automatically skips OpenRouter and routes through keyless `kilo`, `ovh`, and `llm7`.
   - *Important:* `--status` succeeding (`Exit code: 0`) only confirms local config and registry snapshot loading — it does **not** test live upstream network reachability.
 - `scan_and_sync_free_models.py --apply` fetches live provider catalogs, runs `"42"` health probes, and writes a fresh registry snapshot to `$OR_FREE_HOME/or_free_models_registry.json` (never modifying `$SKILL_DIR`). Running `--apply` right after install is recommended because the bundled seed (`scripts/or_free_models_registry.json`) ages over time.
-- `-t fast --max-tokens 64 "Say hello in 5 words"` routes to a live keyless model, prints a short greeting (e.g. `Hello there, how are you?`), and exits with **`Exit code: 0`**.
+- `-t fast --task-class general_knowledge --max-tokens 64 "Say hello in 5 words"` routes to a live keyless model, prints a short greeting (e.g. `Hello there, how are you?`), and exits with **`Exit code: 0`**.
   - *If `-t fast` returns `Exit code: 1` (all keyless candidates temporarily rate-limited or unreachable):* (1) run `scan_and_sync_free_models.py --apply` to refresh live pool availability, (2) retry after 30–60s, or (3) set a free-tier `OPENROUTER_API_KEY` to unlock additional `$0/$0` `:free` models.
+  - *Coding and untagged prompts:* `-t code`, `--task-class code`, and any prompt without an allowlisted `--task-class` do **not** reach a free model. They print one `BYPASS_TO_PRIMARY` decision JSON line and exit **`0` with no model reply**. Do that work on the primary model.
 
 **Windows PowerShell (single-line commands, quoted for paths with spaces):**
 
 ```powershell
 py -3 "$env:USERPROFILE\skills\free-llm-router\scripts\or_free.py" --status
 py -3 "$env:USERPROFILE\skills\free-llm-router\scripts\scan_and_sync_free_models.py" --apply
-py -3 "$env:USERPROFILE\skills\free-llm-router\scripts\or_free.py" -t fast --max-tokens 64 "Say hello in 5 words"
+py -3 "$env:USERPROFILE\skills\free-llm-router\scripts\or_free.py" -t fast --task-class general_knowledge --max-tokens 64 "Say hello in 5 words"
 ```
 
 **Windows CMD (`cmd.exe`):**
@@ -62,7 +63,7 @@ py -3 "$env:USERPROFILE\skills\free-llm-router\scripts\or_free.py" -t fast --max
 set "SKILL_DIR=%USERPROFILE%\skills\free-llm-router"
 py -3 "%SKILL_DIR%\scripts\or_free.py" --status
 py -3 "%SKILL_DIR%\scripts\scan_and_sync_free_models.py" --apply
-py -3 "%SKILL_DIR%\scripts\or_free.py" -t fast --max-tokens 64 "Say hello in 5 words"
+py -3 "%SKILL_DIR%\scripts\or_free.py" -t fast --task-class general_knowledge --max-tokens 64 "Say hello in 5 words"
 ```
 
 Examples: [examples/README.md](examples/README.md) · Policy details: [references/provider-and-registry-policy.md](references/provider-and-registry-policy.md)
@@ -71,23 +72,25 @@ Examples: [examples/README.md](examples/README.md) · Policy details: [reference
 
 ## What tasks should I offload? (Quick FAQ)
 
-| Suitable (Good for) | Avoid (Bad for) |
+| Suitable (allowlisted `--task-class`) | Avoid (`BYPASS_TO_PRIMARY` or never send) |
 |---|---|
-| Short boilerplate / utility functions with doctests | Secrets, API keys, customer PII, proprietary source |
-| Public changelog / docs / log summarization | Multi-step debugging that needs your private repo state |
-| Format conversion (JSON ↔ CSV schema, regex drafts) | Final architecture decisions or production config changes |
-| Brainstorming options / naming / test-case ideas | Anything you cannot send to a public free endpoint |
+| Public research and public copy (`public_research`, `public_copy`) | Coding tasks (`-t code`, `--task-class code`, source, configs) — primary model |
+| Public changelog / docs summarization (`public_summary`) | Untagged prompts (no `--task-class`) — primary model |
+| General-knowledge explanations with no project code (`general_knowledge`) | Secrets, API keys, customer PII, proprietary source |
+| Brainstorming names, outlines, idea lists (`brainstorm`) | Infra, internal hosts, architecture, production config |
+| Already de-identified data (`sanitized_data` and the legacy sanitized/public classes) | Anything you cannot send to a public free endpoint |
 
-Rule of thumb: if the subtask is self-contained, non-sensitive, and the primary agent can verify a short answer without regenerating it, offload it. Otherwise keep it on the primary agent.
+Rule of thumb: offload only when the prompt is plain public prose and you pass an allowlisted `--task-class`. Coding and untagged prompts return `BYPASS_TO_PRIMARY`; do them on the primary model. The primary agent still verifies a short free-model answer without regenerating it.
 
 ## How do I actually save primary-agent tokens with `or-free`?
 
 Simply running a free model does not automatically save primary-agent tokens if the agent sends huge prompts, reads back multi-page outputs, or regenerates the answer itself. Follow this delegation contract:
 
-1. **Delegate self-contained, non-sensitive subtasks:** boilerplate functions, unit-test stubs, public documentation/log summaries, regex/schema conversions, or brainstorming.
-2. **Send minimal input & cap output (`--max-tokens`):** pass only the required public context and set `--max-tokens 400`–`800` so the tool output returned into the primary agent's context window stays compact.
-3. **Verify exit `0` and stop:** once `or_free.py` returns `Exit code: 0`, the primary agent performs a brief sanity check and uses the output directly **without regenerating the same text**.
-4. **Measure honestly:** the `usage` object in `--json` output reports **offloaded free-endpoint tokens**, not net primary-agent tokens saved (since the primary agent still spends tokens invoking the tool and reading the result).
+1. **Delegate only allowlisted public task classes:** `public_research`, `public_copy`, `brainstorm`, `general_knowledge`, `sanitized_data`, `public_summary`, `sanitized_log_preprocessing`, `public_text_classification`, `public_document_extraction`.
+2. **Keep coding and untagged work on the primary model:** `-t code`, `--task-class code`, a missing `--task-class`, and any prompt the local code/config/infra scanner flags return `BYPASS_TO_PRIMARY` (exit `0`, decision JSON only, no model reply).
+3. **Send minimal input & cap output (`--max-tokens`):** pass only the required public context and set `--max-tokens 400`–`800` so the tool output returned into the primary agent's context window stays compact.
+4. **Verify the decision, then stop:** `Exit code: 0` with `BYPASS_TO_PRIMARY` means there is no free-model answer. `Exit code: 0` with a model reply (`http_status` 200 in `--json`) means the primary agent sanity-checks that text and uses it **without regenerating the same answer**.
+5. **Measure honestly:** the `usage` object in `--json` output reports **offloaded free-endpoint tokens**, not net primary-agent tokens saved (since the primary agent still spends tokens invoking the tool and reading the result).
 
 See [examples/README.md](examples/README.md) for a complete end-to-end **Grok Bot Token-Saving Workflow Example**.
 
@@ -95,23 +98,23 @@ See [examples/README.md](examples/README.md) for a complete end-to-end **Grok Bo
 
 ## Quota policy gate
 
-Before each call, `or_free.py` reads `quota_policy.json` (`OR_FREE_QUOTA_POLICY_PATH`, otherwise `$OR_FREE_HOME/quota_policy.json`) and decides whether the task stays on the primary model or goes to the free pool. **Without a policy file, behavior is unchanged:** the decision is `POLICY_UNAVAILABLE` and the call still uses the free pool.
+Before each call, `or_free.py` applies the **default-deny content gate**, then reads `quota_policy.json` (`OR_FREE_QUOTA_POLICY_PATH`, otherwise `$OR_FREE_HOME/quota_policy.json`). The content gate runs even when no policy file exists. Missing `--task-class`, `auto` / `general` / `code` / `long` / `fast`, any class outside the allowlist, a sensitivity other than `public` / `sanitized` / `deidentified`, and any prompt the local code/config/infra scanner flags all return `BYPASS_TO_PRIMARY`. A policy file's `routing.free_allowlist` can only **narrow** the hardcoded allowlist; it cannot add classes (including `code` or `verified_low_risk_code_candidate`). Only content that passes the gate and has no readable policy file gets `POLICY_UNAVAILABLE` (free pool allowed).
 
 ```bash
-python3 "$SKILL_DIR/scripts/or_free.py" --check-policy --json
+python3 "$SKILL_DIR/scripts/or_free.py" --check-policy --json --task-class public_copy "Write a tweet announcing a cozy cat puzzle game"
 ```
 
-`--check-policy` always exits `0` and prints decision JSON. Read `decision`:
+`--check-policy` always exits `0` and prints decision JSON. Pass the prompt (positional text or `--prompt-file`) so DLP and the code/config scanner run. Without a prompt, `content_scanned` is false; a real call always scans. Read `decision`:
 
 | `decision` | What to do |
 |---|---|
 | `USE_FREE` | Offload to the free pool. |
-| `BYPASS_TO_PRIMARY` | Keep the task on the primary model. |
-| `POLICY_UNAVAILABLE` | No readable policy file. Offload as before. |
+| `BYPASS_TO_PRIMARY` | Keep the task on the primary model. This includes coding and untagged prompts. |
+| `POLICY_UNAVAILABLE` | Content gate passed and there is no readable policy file. Offload to the free pool. |
 
 **`BYPASS_TO_PRIMARY` exits `0` with no model reply.** A gated call prints one decision JSON line and does not contact a provider. Callers must check `decision`, not only the exit code, before treating stdout as a model answer.
 
-An expired `cycle.reset_at` rolls forward automatically (same length, default 7 days): usage becomes `unknown`, tier becomes `blue`, and `revision` increments. Unknown usage routes as conservative blue (`USE_FREE`). Set `OR_FREE_POLICY_NO_ROLLOVER=1` to renew in memory only. Write `usage.status` to `known` and set `used_fraction` (0–1) when a live sample is available.
+An expired `cycle.reset_at` rolls forward automatically (same length, default 7 days): usage becomes `unknown`, tier becomes `blue`, and `revision` increments. When the content gate has already passed, unknown usage routes as conservative blue (`USE_FREE`). Set `OR_FREE_POLICY_NO_ROLLOVER=1` to renew in memory only. Write `usage.status` to `known` and set `used_fraction` (0–1) when a live sample is available.
 
 Minimal `quota_policy.json` (placeholder values only):
 
@@ -168,6 +171,7 @@ Router and scanner resolve keys in the same order:
 | `OR_FREE_HOME` | Optional override for config/state/log directory (defaults: `~/.config/or-free` on Linux/macOS, `%LOCALAPPDATA%\or-free` on Windows). Default policy path is `$OR_FREE_HOME/quota_policy.json` |
 | `OR_FREE_QUOTA_POLICY_PATH` | Optional path to `quota_policy.json`. Missing file means no quota gating |
 | `OR_FREE_POLICY_NO_ROLLOVER` | Set to `1` to renew an expired cycle in memory only (do not write the policy file back) |
+| `OR_FREE_INTERNAL_DOMAINS` | Comma-separated company domains the content scanner always treats as private (for example `example.com,studio.io`) |
 | `OR_FREE_REGISTRY_PATH` | **Strict** registry path (overridden by `--registry`; exits with code `4` on missing/invalid/stale file) |
 | `OR_FREE_MAX_REGISTRY_AGE_HOURS` | Reject catalog price proofs older than `<hours>` (finite `> 0`) |
 | `XDG_CONFIG_HOME` | Linux/macOS config root (`$XDG_CONFIG_HOME/or-free` when `OR_FREE_HOME` is unset) |
@@ -179,7 +183,7 @@ Router and scanner resolve keys in the same order:
 
 | Code | Meaning |
 |---:|---|
-| `0` | **Success:** route candidate returned a valid response, or `--status` / `--validate-registry` / `--check-policy` succeeded. A quota-gated `BYPASS_TO_PRIMARY` also exits `0` and prints decision JSON only (no model reply) — check `decision`. |
+| `0` | **Success:** route candidate returned a valid response, or `--status` / `--validate-registry` / `--check-policy` succeeded. A content-gate or quota-gated `BYPASS_TO_PRIMARY` also exits `0` and prints decision JSON only (no model reply) — check `decision`. |
 | `1` | **Candidates exhausted or runtime/lock error:** all allowed route candidates failed/timed out, general runtime error, or state lock/persistence failure. |
 | `2` | **Blocked by zero-cost policy gate:** requested model/provider failed `is_safe_free_target` (paid model, missing `$0/$0` catalog proof, or unverified provider without `--allow-unverified-model`). |
 | `3` | **Blocked by local DLP filter:** prompt matched the partial credential filter before any network request was sent. |
@@ -236,14 +240,15 @@ python3 "$SKILL_DIR/scripts/scan_and_sync_free_models.py" --apply --update-bundl
 
 - **Outbound prompt traffic:** your prompt (and optional system prompt) is sent over HTTPS to the selected provider. Public free endpoints may log or retain prompts — never send secrets or proprietary code.
 - **Multi-provider failover behavior:** if the primary candidate fails (e.g., HTTP 429/5xx or timeout), automatic failover may send the same prompt to the next allowed candidate across enabled providers (`openrouter`, `kilo`, `ovh`, `llm7`). Pass `--no-fallback` or `-p <provider>` to restrict traffic to a single model or provider.
-- **Partial credential filter (DLP):** blocks common secret/token formats locally **before** any network request (`Exit code: 3`); it is a safety net, not a confidentiality guarantee.
+- **Default-deny content gate:** before any network request, the router requires an allowlisted `--task-class` and scans the prompt for code, config, and private infrastructure. A hit returns `BYPASS_TO_PRIMARY` (exit `0`, no reply). A false positive stays on the primary model.
+- **Partial credential filter (DLP):** blocks common secret/token formats locally **before** any network request (`Exit code: 3`); it is a safety net, not a confidentiality guarantee. A DLP hit during `--check-policy` is `BYPASS_TO_PRIMARY` with `dlp_blocked` true (exit `0`); a real call still exits `3`.
 - **Audit logs & honest cost reporting:** local audit logs record metadata only by default (opt-in 60-char preview via `OR_FREE_AUDIT_PREVIEW=1`). When an upstream response omits cost, `or-free` reports `"cost_usd": null` with a `billing_policy` label — never a fabricated `0.0`.
 
 ---
 
 ## Package Integrity Verification (`SHA256SUMS.txt`)
 
-To verify that `scripts/or_free.py`, `scripts/scan_and_sync_free_models.py`, and the bundled seed `scripts/or_free_models_registry.json` match the audited R7 release byte-for-byte:
+To verify the tracked files listed in `SHA256SUMS.txt` — including `scripts/or_free.py` and `SKILL.md` — match this release byte-for-byte:
 
 ```bash
 cd "$HOME/agent-data/workflows/free-llm-router" && sha256sum -c SHA256SUMS.txt
